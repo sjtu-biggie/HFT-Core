@@ -1,0 +1,113 @@
+cmake_minimum_required(VERSION 3.20)
+project(HFTSystem VERSION 1.0.0 LANGUAGES CXX)
+
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Set default build type to Release for performance
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# Compiler-specific options for performance
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(-O3 -march=native -flto)
+        add_link_options(-flto)
+    endif()
+endif()
+
+# Find required packages
+find_package(PkgConfig REQUIRED)
+
+# Try to find ZeroMQ
+find_path(ZMQ_INCLUDE_DIR zmq.h)
+find_library(ZMQ_LIBRARY NAMES zmq libzmq)
+
+if(NOT ZMQ_INCLUDE_DIR OR NOT ZMQ_LIBRARY)
+    message(FATAL_ERROR "ZeroMQ not found. Please install libzmq3-dev")
+endif()
+
+# Try to find liburing
+find_path(URING_INCLUDE_DIR liburing.h)
+find_library(URING_LIBRARY NAMES uring liburing)
+
+if(NOT URING_INCLUDE_DIR OR NOT URING_LIBRARY)
+    message(WARNING "liburing not found. Install liburing-dev for io_uring support")
+endif()
+
+# Include directories
+include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${ZMQ_INCLUDE_DIR})
+if(URING_INCLUDE_DIR)
+    include_directories(${URING_INCLUDE_DIR})
+endif()
+
+# Common library with shared code
+add_library(hft_common STATIC
+    src/common/message_types.cpp
+    src/common/logging.cpp
+    src/common/config.cpp
+)
+
+target_include_directories(hft_common PUBLIC src)
+target_link_libraries(hft_common ${ZMQ_LIBRARY} pthread)
+
+# Define executables for each service
+set(SERVICES
+    market_data_handler
+    strategy_engine
+    order_gateway
+    position_risk_service
+    low_latency_logger
+    websocket_bridge
+    control_api
+)
+
+# Create executables for each service
+foreach(SERVICE ${SERVICES})
+    add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp)
+    target_link_libraries(${SERVICE} hft_common ${ZMQ_LIBRARY} pthread)
+    
+    # Add io_uring support for logger
+    if(SERVICE STREQUAL "low_latency_logger" AND URING_LIBRARY)
+        target_link_libraries(${SERVICE} ${URING_LIBRARY})
+        target_compile_definitions(${SERVICE} PRIVATE HAS_IO_URING=1)
+    endif()
+endforeach()
+
+# Create test executables
+enable_testing()
+
+# Mock data generator for testing
+add_executable(mock_data_generator src/test/mock_data_generator.cpp)
+target_link_libraries(mock_data_generator hft_common ${ZMQ_LIBRARY} pthread)
+
+# Integration test
+add_executable(integration_test src/test/integration_test.cpp)
+target_link_libraries(integration_test hft_common ${ZMQ_LIBRARY} pthread)
+
+# Unit tests for common components
+add_executable(unit_tests
+    src/test/test_message_types.cpp
+    src/test/test_logging.cpp
+    src/test/test_config.cpp
+)
+target_link_libraries(unit_tests hft_common ${ZMQ_LIBRARY} pthread)
+
+# Add tests to CTest
+add_test(NAME unit_tests COMMAND unit_tests)
+add_test(NAME integration_test COMMAND integration_test)
+
+# Install targets
+install(TARGETS ${SERVICES} mock_data_generator
+    RUNTIME DESTINATION bin
+)
+
+# Create directories for runtime
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/logs)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/data)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/config)
