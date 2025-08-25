@@ -1,4 +1,7 @@
 #include "strategy_engine.h"
+#include "../common/static_config.h"
+#include "../common/metrics_collector.h"
+#include "../common/high_res_timer.h"
 #include <chrono>
 #include <iostream>
 
@@ -26,19 +29,23 @@ void MomentumStrategy::on_market_data(const MarketData& data) {
         auto time_it = last_signal_time_.find(symbol);
         bool can_signal = (time_it == last_signal_time_.end()) ||
                          (std::chrono::duration_cast<std::chrono::milliseconds>(
-                             now - time_it->second).count() >= MIN_SIGNAL_INTERVAL_MS);
+                             now - time_it->second).count() >= StaticConfig::get_min_signal_interval_ms());
         
-        if (can_signal && std::abs(price_change) > MOMENTUM_THRESHOLD) {
+        if (can_signal && std::abs(price_change) > StaticConfig::get_momentum_threshold()) {
+            HFT_METRICS_TIMER(metrics::SIGNAL_GENERATION);
+            
             // Generate momentum signal
             SignalAction action = (price_change > 0) ? SignalAction::BUY : SignalAction::SELL;
             
             TradingSignal signal = MessageFactory::create_trading_signal(
                 symbol, action, OrderType::MARKET, 0.0, 100, strategy_id_, 
-                std::min(std::abs(price_change) / MOMENTUM_THRESHOLD, 1.0)
+                std::min(std::abs(price_change) / StaticConfig::get_momentum_threshold(), 1.0)
             );
             
-            // This would normally be sent to the strategy engine's publisher
-            logger_.info("Generated " + std::string(action == SignalAction::BUY ? "BUY" : "SELL") +
+            // Publish signal through engine
+            publish_signal(signal);
+            
+            logger_.info("Published " + std::string(action == SignalAction::BUY ? "BUY" : "SELL") +
                         " signal for " + symbol + " (change: " + 
                         std::to_string(price_change * 100) + "%)");
             
@@ -72,6 +79,11 @@ StrategyEngine::~StrategyEngine() {
 bool StrategyEngine::initialize() {
     logger_.info("Initializing Strategy Engine");
     
+    // Initialize high-performance systems
+    HighResTimer::initialize();
+    MetricsCollector::instance().initialize();
+    StaticConfig::load_from_file("config/hft_config.conf");
+    
     config_ = std::make_unique<Config>();
     
     try {
@@ -96,17 +108,19 @@ bool StrategyEngine::initialize() {
         int linger = 0;
         signal_pub_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         
-        // Connect to endpoints
-        std::string market_data_endpoint = config_->get_string(GlobalConfig::MARKET_DATA_ENDPOINT);
+        // Connect to endpoints using StaticConfig for better performance
+        const char* market_data_endpoint = StaticConfig::get_market_data_endpoint();
         subscriber_->connect(market_data_endpoint);
-        logger_.info("Connected to market data: " + market_data_endpoint);
+        logger_.info("Connected to market data: " + std::string(market_data_endpoint));
         
-        // For now, use a separate endpoint for executions (in production, this would be different)
-        execution_sub_->connect("tcp://localhost:5557");
+        // Connect to executions endpoint using StaticConfig
+        const char* executions_endpoint = StaticConfig::get_executions_endpoint();
+        execution_sub_->connect(executions_endpoint);
         
         // Bind signal publisher
-        signal_pub_->bind("tcp://localhost:5558");
-        logger_.info("Signal publisher bound to tcp://localhost:5558");
+        const char* signals_endpoint = StaticConfig::get_signals_endpoint();
+        signal_pub_->bind(signals_endpoint);
+        logger_.info("Signal publisher bound to " + std::string(signals_endpoint));
         
         // Add default momentum strategy
         add_strategy(std::make_unique<MomentumStrategy>(1001));
@@ -155,6 +169,11 @@ void StrategyEngine::stop() {
     if (signal_pub_) signal_pub_->close();
     
     log_statistics();
+    
+    // Export final metrics
+    MetricsCollector::instance().export_to_file("logs/strategy_engine_metrics.csv");
+    MetricsCollector::instance().shutdown();
+    
     logger_.info("Strategy Engine stopped");
 }
 
@@ -165,6 +184,10 @@ bool StrategyEngine::is_running() const {
 void StrategyEngine::add_strategy(std::unique_ptr<Strategy> strategy) {
     logger_.info("Adding strategy: " + strategy->get_name() + 
                 " (ID: " + std::to_string(strategy->get_id()) + ")");
+    
+    // Set engine reference for signal publishing
+    strategy->set_engine(this);
+    
     strategies_.push_back(std::move(strategy));
 }
 
@@ -227,12 +250,15 @@ void StrategyEngine::process_messages() {
 }
 
 void StrategyEngine::handle_market_data(const MarketData& data) {
+    HFT_METRICS_TIMER(metrics::STRATEGY_PROCESS);
+    
     // Forward to all strategies
     for (auto& strategy : strategies_) {
         strategy->on_market_data(data);
     }
     
     market_data_processed_++;
+    HFT_METRICS_COUNTER(metrics::MARKET_DATA_MESSAGES);
 }
 
 void StrategyEngine::handle_execution(const OrderExecution& execution) {
@@ -243,12 +269,15 @@ void StrategyEngine::handle_execution(const OrderExecution& execution) {
 }
 
 void StrategyEngine::publish_signal(const TradingSignal& signal) {
+    HFT_METRICS_TIMER(metrics::SIGNAL_PUBLISH);
+    
     try {
         zmq::message_t message(sizeof(TradingSignal));
         std::memcpy(message.data(), &signal, sizeof(TradingSignal));
         
         signal_pub_->send(message, zmq::send_flags::dontwait);
         signals_generated_++;
+        HFT_METRICS_COUNTER(metrics::SIGNALS_GENERATED);
         
     } catch (const zmq::error_t& e) {
         if (e.num() != EAGAIN) {
@@ -264,6 +293,13 @@ void StrategyEngine::log_statistics() {
     std::string stats = "Processed " + std::to_string(data_count) + 
                        " market data messages, generated " + std::to_string(signal_count) + " signals";
     logger_.info(stats);
+}
+
+// Strategy base class implementation
+void Strategy::publish_signal(const TradingSignal& signal) {
+    if (engine_) {
+        engine_->publish_signal(signal);
+    }
 }
 
 } // namespace hft

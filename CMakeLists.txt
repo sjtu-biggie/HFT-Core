@@ -51,6 +51,11 @@ add_library(hft_common STATIC
     src/common/message_types.cpp
     src/common/logging.cpp
     src/common/config.cpp
+    src/common/static_config.cpp
+    src/common/high_res_timer.cpp
+    src/common/metrics_collector.cpp
+    src/common/order_book.cpp
+    src/common/simple_transport_demo.cpp
 )
 
 target_include_directories(hft_common PUBLIC src)

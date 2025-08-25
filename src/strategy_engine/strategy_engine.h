@@ -12,6 +12,9 @@
 namespace hft {
 
 // Abstract base class for trading strategies
+// Forward declaration
+class StrategyEngine;
+
 class Strategy {
 public:
     virtual ~Strategy() = default;
@@ -27,6 +30,15 @@ public:
     
     // Get strategy ID
     virtual uint64_t get_id() const = 0;
+    
+    // Set engine reference for signal publishing
+    void set_engine(StrategyEngine* engine) { engine_ = engine; }
+
+protected:
+    // Publish signal through engine
+    void publish_signal(const TradingSignal& signal);
+    
+    StrategyEngine* engine_ = nullptr;
 };
 
 // Simple momentum strategy for testing
@@ -46,9 +58,9 @@ private:
     
     Logger logger_;
     
-    // Strategy parameters
-    static constexpr double MOMENTUM_THRESHOLD = 0.01;  // 1% price change
-    static constexpr int MIN_SIGNAL_INTERVAL_MS = 1000;  // Minimum time between signals
+    // Strategy parameters (now using StaticConfig)
+    // static constexpr double MOMENTUM_THRESHOLD = 0.001;  // 0.1% price change (lowered for testing)
+    // static constexpr int MIN_SIGNAL_INTERVAL_MS = 1000;  // Minimum time between signals
 };
 
 class StrategyEngine {
@@ -70,6 +82,9 @@ public:
     
     // Add a strategy to the engine
     void add_strategy(std::unique_ptr<Strategy> strategy);
+    
+    // Publish trading signal (public for Strategy access)
+    void publish_signal(const TradingSignal& signal);
 
 private:
     // Configuration
@@ -98,9 +113,6 @@ private:
     // Message handlers
     void handle_market_data(const MarketData& data);
     void handle_execution(const OrderExecution& execution);
-    
-    // Publish trading signal
-    void publish_signal(const TradingSignal& signal);
     
     // Performance monitoring
     void log_statistics();

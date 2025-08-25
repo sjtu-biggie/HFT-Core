@@ -1,4 +1,5 @@
 #include "position_risk_service.h"
+#include "../common/static_config.h"
 #include <iostream>
 
 namespace hft {
@@ -23,7 +24,7 @@ bool PositionRiskService::initialize() {
         // Execution subscriber
         execution_subscriber_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
         execution_subscriber_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-        execution_subscriber_->connect("tcp://localhost:5557");
+        execution_subscriber_->connect(StaticConfig::get_executions_endpoint());
         
         // Market data subscriber
         market_data_subscriber_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
@@ -33,7 +34,7 @@ bool PositionRiskService::initialize() {
         
         // Position publisher
         position_publisher_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PUB);
-        position_publisher_->bind("tcp://localhost:5559");
+        position_publisher_->bind(StaticConfig::get_positions_endpoint());
         
         logger_.info("Position & Risk Service initialized");
         return true;
