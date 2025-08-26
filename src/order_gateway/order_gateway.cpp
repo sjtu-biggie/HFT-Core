@@ -23,7 +23,8 @@ bool OrderGateway::initialize() {
         context_ = std::make_unique<zmq::context_t>(1);
         
         // Signal subscriber
-        signal_subscriber_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PULL);
+        signal_subscriber_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
+        signal_subscriber_->setsockopt(ZMQ_SUBSCRIBE, "", 0);  // Subscribe to all messages
         int rcvhwm = 1000;
         signal_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
         signal_subscriber_->connect(StaticConfig::get_signals_endpoint());

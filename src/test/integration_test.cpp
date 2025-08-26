@@ -1,6 +1,6 @@
 #include "../common/message_types.h"
 #include "../common/logging.h"
-#include "../common/config.h"
+#include "../common/static_config.h"
 #include <zmq.hpp>
 #include <iostream>
 #include <thread>
@@ -18,7 +18,7 @@ public:
         , trading_signals_received_(0)
         , order_executions_received_(0)
         , position_updates_received_(0)
-        , logger_("IntegrationTest") {
+        , logger_("IntegrationTest", StaticConfig::get_logger_endpoint()) {
     }
     
     bool initialize() {
@@ -346,8 +346,11 @@ int main(int argc, char* argv[]) {
     
     int duration = (argc > 1) ? std::atoi(argv[1]) : 20;  // Default 20 seconds
     
+    // Initialize configuration
+    StaticConfig::load_from_file("config/hft_config.conf");
+    
     // Initialize logging
-    GlobalLogger::instance().init("IntegrationTest");
+    GlobalLogger::instance().init("IntegrationTest", StaticConfig::get_logger_endpoint());
     
     // Set up signal handling
     signal(SIGINT, signal_handler);
