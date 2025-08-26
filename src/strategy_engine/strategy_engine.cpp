@@ -102,7 +102,7 @@ bool StrategyEngine::initialize() {
         execution_sub_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
         
         // Signal publisher
-        signal_pub_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PUSH);
+        signal_pub_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PUB);
         int sndhwm = 1000;
         signal_pub_->setsockopt(ZMQ_SNDHWM, &sndhwm, sizeof(sndhwm));
         int linger = 0;
