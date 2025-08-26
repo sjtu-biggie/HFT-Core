@@ -1,4 +1,5 @@
 #include "order_gateway.h"
+#include "../common/static_config.h"
 #include <random>
 #include <chrono>
 
@@ -6,7 +7,7 @@ namespace hft {
 
 OrderGateway::OrderGateway()
     : running_(false), next_order_id_(1), orders_processed_(0), orders_filled_(0)
-    , logger_("OrderGateway") {
+    , logger_("OrderGateway", StaticConfig::get_logger_endpoint()) {
 }
 
 OrderGateway::~OrderGateway() {
@@ -25,7 +26,7 @@ bool OrderGateway::initialize() {
         signal_subscriber_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PULL);
         int rcvhwm = 1000;
         signal_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
-        signal_subscriber_->connect("tcp://localhost:5558");
+        signal_subscriber_->connect(StaticConfig::get_signals_endpoint());
         
         // Execution publisher
         execution_publisher_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PUB);
@@ -33,7 +34,7 @@ bool OrderGateway::initialize() {
         execution_publisher_->setsockopt(ZMQ_SNDHWM, &sndhwm, sizeof(sndhwm));
         int linger = 0;
         execution_publisher_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-        execution_publisher_->bind("tcp://localhost:5557");
+        execution_publisher_->bind(StaticConfig::get_executions_endpoint());
         
         logger_.info("Order Gateway initialized in paper trading mode");
         return true;

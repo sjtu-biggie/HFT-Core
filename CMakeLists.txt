@@ -51,6 +51,11 @@ add_library(hft_common STATIC
     src/common/message_types.cpp
     src/common/logging.cpp
     src/common/config.cpp
+    src/common/static_config.cpp
+    src/common/high_res_timer.cpp
+    src/common/metrics_collector.cpp
+    src/common/order_book.cpp
+    src/common/simple_transport_demo.cpp
 )
 
 target_include_directories(hft_common PUBLIC src)
@@ -90,16 +95,20 @@ target_link_libraries(mock_data_generator hft_common ${ZMQ_LIBRARY} pthread)
 add_executable(integration_test src/test/integration_test.cpp)
 target_link_libraries(integration_test hft_common ${ZMQ_LIBRARY} pthread)
 
-# Unit tests for common components
-add_executable(unit_tests
-    src/test/test_message_types.cpp
-    src/test/test_logging.cpp
-    src/test/test_config.cpp
-)
-target_link_libraries(unit_tests hft_common ${ZMQ_LIBRARY} pthread)
+# Unit tests for common components (create separate executables)
+add_executable(test_message_types src/test/test_message_types.cpp)
+target_link_libraries(test_message_types hft_common ${ZMQ_LIBRARY} pthread)
+
+add_executable(test_logging src/test/test_logging.cpp)
+target_link_libraries(test_logging hft_common ${ZMQ_LIBRARY} pthread)
+
+add_executable(test_config src/test/test_config.cpp)
+target_link_libraries(test_config hft_common ${ZMQ_LIBRARY} pthread)
 
 # Add tests to CTest
-add_test(NAME unit_tests COMMAND unit_tests)
+add_test(NAME test_message_types COMMAND test_message_types)
+add_test(NAME test_logging COMMAND test_logging)
+add_test(NAME test_config COMMAND test_config)
 add_test(NAME integration_test COMMAND integration_test)
 
 # Install targets

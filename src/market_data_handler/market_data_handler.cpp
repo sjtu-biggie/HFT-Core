@@ -9,7 +9,7 @@ MarketDataHandler::MarketDataHandler()
     : running_(false)
     , messages_processed_(0)
     , bytes_processed_(0)
-    , logger_("MarketDataHandler") {
+    , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) {
 }
 
 MarketDataHandler::~MarketDataHandler() {
@@ -18,8 +18,6 @@ MarketDataHandler::~MarketDataHandler() {
 
 bool MarketDataHandler::initialize() {
     logger_.info("Initializing Market Data Handler");
-    
-    config_ = std::make_unique<Config>();
     
     try {
         // Initialize ZeroMQ context and publisher
@@ -34,13 +32,13 @@ bool MarketDataHandler::initialize() {
         publisher_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         
         // Bind to market data endpoint
-        std::string endpoint = config_->get_string(GlobalConfig::MARKET_DATA_ENDPOINT);
+        const char* endpoint = StaticConfig::get_market_data_endpoint();
         publisher_->bind(endpoint);
         
-        logger_.info("Bound to endpoint: " + endpoint);
+        logger_.info("Bound to endpoint: " + std::string(endpoint));
         
         // Initialize DPDK if enabled
-        if (config_->get_bool(GlobalConfig::ENABLE_DPDK)) {
+        if (StaticConfig::get_enable_dpdk()) {
             if (!initialize_dpdk()) {
                 logger_.warning("DPDK initialization failed, using mock data");
             }
@@ -104,7 +102,7 @@ void MarketDataHandler::process_market_data() {
     const auto stats_interval = std::chrono::seconds(10);
     
     while (running_.load()) {
-        if (config_->get_bool(GlobalConfig::ENABLE_DPDK)) {
+        if (StaticConfig::get_enable_dpdk()) {
             // Process DPDK packets if available
             if (!process_dpdk_packets()) {
                 // Fall back to mock data if no packets
@@ -123,7 +121,7 @@ void MarketDataHandler::process_market_data() {
         }
         
         // Small sleep to prevent busy waiting in mock mode
-        if (!config_->get_bool(GlobalConfig::ENABLE_DPDK)) {
+        if (!StaticConfig::get_enable_dpdk()) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
     }

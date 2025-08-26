@@ -2,7 +2,7 @@
 
 #include "../common/message_types.h"
 #include "../common/logging.h"
-#include "../common/config.h"
+#include "../common/static_config.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -28,8 +28,6 @@ public:
     bool is_running() const;
 
 private:
-    // Configuration
-    std::unique_ptr<Config> config_;
     
     // ZeroMQ context and publisher socket
     std::unique_ptr<zmq::context_t> context_;

@@ -344,7 +344,7 @@ int main(int argc, char* argv[]) {
     std::cout << "HFT System Integration Test v1.0" << std::endl;
     std::cout << "=================================" << std::endl;
     
-    int duration = (argc > 1) ? std::atoi(argv[1]) : 60;  // Default 60 seconds
+    int duration = (argc > 1) ? std::atoi(argv[1]) : 20;  // Default 20 seconds
     
     // Initialize logging
     GlobalLogger::instance().init("IntegrationTest");

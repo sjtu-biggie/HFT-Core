@@ -13,14 +13,15 @@ using timestamp_t = std::chrono::nanoseconds;
 // Message type enumeration for fast dispatch
 enum class MessageType : uint16_t {
     MARKET_DATA = 1,
-    TRADING_SIGNAL = 2,
-    ORDER_REQUEST = 3,
-    ORDER_EXECUTION = 4,
-    POSITION_UPDATE = 5,
-    RISK_ALERT = 6,
-    LOG_MESSAGE = 7,
-    CONTROL_COMMAND = 8,
-    SYSTEM_STATUS = 9
+    ORDER_BOOK_UPDATE = 2,
+    TRADING_SIGNAL = 3,
+    ORDER_REQUEST = 4,
+    ORDER_EXECUTION = 5,
+    POSITION_UPDATE = 6,
+    RISK_ALERT = 7,
+    LOG_MESSAGE = 8,
+    CONTROL_COMMAND = 9,
+    SYSTEM_STATUS = 10
 };
 
 // Common message header for all internal messages

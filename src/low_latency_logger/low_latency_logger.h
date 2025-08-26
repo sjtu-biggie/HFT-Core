@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../common/message_types.h"
-#include "../common/config.h"
+#include "../common/static_config.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -28,7 +28,6 @@ public:
     bool is_running() const;
 
 private:
-    std::unique_ptr<Config> config_;
     
     // ZeroMQ socket for receiving log messages
     std::unique_ptr<zmq::context_t> context_;

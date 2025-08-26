@@ -21,6 +21,9 @@ struct Order {
     uint32_t filled_quantity;
     std::chrono::steady_clock::time_point created_time;
     
+    Order() : order_id(0), action(SignalAction::BUY), type(OrderType::MARKET)
+        , price(0.0), quantity(0), filled_quantity(0), created_time(std::chrono::steady_clock::now()) {}
+    
     Order(uint64_t id, const TradingSignal& signal)
         : order_id(id), symbol(signal.symbol), action(signal.action)
         , type(signal.order_type), price(signal.price), quantity(signal.quantity)
