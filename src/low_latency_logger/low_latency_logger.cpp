@@ -24,8 +24,6 @@ LowLatencyLogger::~LowLatencyLogger() {
 bool LowLatencyLogger::initialize() {
     std::cout << "[LowLatencyLogger] Initializing Low-Latency Logger" << std::endl;
     
-    config_ = std::make_unique<Config>();
-    
     try {
         // Initialize ZeroMQ
         context_ = std::make_unique<zmq::context_t>(1);
@@ -34,7 +32,7 @@ bool LowLatencyLogger::initialize() {
         int rcvhwm = 10000;
         log_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
         
-        std::string endpoint = config_->get_string(GlobalConfig::LOGGER_ENDPOINT);
+        const char* endpoint = StaticConfig::get_logger_endpoint();
         log_subscriber_->bind(endpoint);
         std::cout << "[LowLatencyLogger] Bound to " << endpoint << std::endl;
         

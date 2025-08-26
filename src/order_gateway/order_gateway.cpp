@@ -7,7 +7,7 @@ namespace hft {
 
 OrderGateway::OrderGateway()
     : running_(false), next_order_id_(1), orders_processed_(0), orders_filled_(0)
-    , logger_("OrderGateway") {
+    , logger_("OrderGateway", StaticConfig::get_logger_endpoint()) {
 }
 
 OrderGateway::~OrderGateway() {

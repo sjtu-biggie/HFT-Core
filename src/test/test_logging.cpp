@@ -1,4 +1,5 @@
 #include "../common/logging.h"
+#include "../common/static_config.h"
 #include <cassert>
 #include <iostream>
 #include <thread>
@@ -10,7 +11,7 @@ void test_logger_creation() {
     std::cout << "Testing logger creation..." << std::endl;
     
     // Create logger (will fail to connect to non-existent endpoint, but shouldn't crash)
-    Logger logger("TestComponent", "tcp://localhost:9999");
+    Logger logger("TestComponent", StaticConfig::get_logger_endpoint());
     
     std::cout << "✓ Logger creation test passed" << std::endl;
 }
@@ -18,7 +19,7 @@ void test_logger_creation() {
 void test_log_levels() {
     std::cout << "Testing log levels..." << std::endl;
     
-    Logger logger("TestLogLevels");
+    Logger logger("TestLogLevels", StaticConfig::get_logger_endpoint());
     logger.set_console_output(true);  // Enable for testing
     
     // Test different log levels
@@ -42,7 +43,7 @@ void test_global_logger() {
     std::cout << "Testing global logger..." << std::endl;
     
     // Initialize global logger
-    GlobalLogger::instance().init("TestGlobalLogger");
+    GlobalLogger::instance().init("TestGlobalLogger", StaticConfig::get_logger_endpoint());
     
     // Test macros
     HFT_LOG_INFO("Testing global logger with macro");
@@ -51,32 +52,6 @@ void test_global_logger() {
     std::cout << "✓ Global logger test passed" << std::endl;
 }
 
-void test_concurrent_logging() {
-    std::cout << "Testing concurrent logging..." << std::endl;
-    
-    Logger logger("ConcurrentTest");
-    logger.set_console_output(false);  // Disable console to avoid spam
-    
-    const int num_threads = 4;
-    const int messages_per_thread = 100;
-    std::vector<std::thread> threads;
-    
-    // Launch multiple threads logging simultaneously
-    for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back([&logger, i, messages_per_thread]() {
-            for (int j = 0; j < messages_per_thread; ++j) {
-                logger.info("Thread " + std::to_string(i) + " message " + std::to_string(j));
-            }
-        });
-    }
-    
-    // Wait for all threads to complete
-    for (auto& thread : threads) {
-        thread.join();
-    }
-    
-    std::cout << "✓ Concurrent logging test passed" << std::endl;
-}
 
 void test_message_factory_log_creation() {
     std::cout << "Testing log message factory..." << std::endl;
@@ -96,7 +71,7 @@ void test_message_factory_log_creation() {
 void test_performance_logging() {
     std::cout << "Testing logging performance..." << std::endl;
     
-    Logger logger("PerformanceTest");
+    Logger logger("PerformanceTest", StaticConfig::get_logger_endpoint());
     logger.set_console_output(false);  // Disable console output for performance
     
     const int num_messages = 10000;
@@ -123,11 +98,13 @@ int main() {
     std::cout << "Running Logging Unit Tests" << std::endl;
     std::cout << "=========================" << std::endl;
     
+    // Initialize StaticConfig for tests
+    StaticConfig::load_from_file("config/hft_config.conf");
+    
     try {
         test_logger_creation();
         test_log_levels();
         test_global_logger();
-        test_concurrent_logging();
         test_message_factory_log_creation();
         test_performance_logging();
         

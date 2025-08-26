@@ -1,6 +1,8 @@
 #pragma once
 
 #include "message_types.h"
+#include "config.h"
+
 #include <memory>
 #include <string>
 #include <zmq.hpp>
@@ -9,7 +11,7 @@ namespace hft {
 
 class Logger {
 public:
-    Logger(const std::string& component_name, const std::string& endpoint = "tcp://localhost:5555");
+    Logger(const std::string& component_name, const std::string& endpoint);
     ~Logger();
     
     void log(LogLevel level, const std::string& message);

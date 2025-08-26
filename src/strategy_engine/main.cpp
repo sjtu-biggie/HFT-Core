@@ -1,6 +1,6 @@
 #include "strategy_engine.h"
 #include "../common/logging.h"
-#include "../common/config.h"
+#include "../common/static_config.h"
 #include <iostream>
 #include <signal.h>
 #include <thread>
@@ -22,10 +22,10 @@ int main(int argc, char* argv[]) {
     
     // Initialize configuration
     std::string config_file = (argc > 1) ? argv[1] : "config/hft_config.conf";
-    GlobalConfig::instance().init(config_file);
+    StaticConfig::load_from_file(config_file.c_str());
     
     // Initialize logging
-    GlobalLogger::instance().init("StrategyEngine");
+    GlobalLogger::instance().init("StrategyEngine", StaticConfig::get_logger_endpoint());
     
     // Set up signal handling
     signal(SIGINT, signal_handler);

@@ -6,7 +6,7 @@ namespace hft {
 
 PositionRiskService::PositionRiskService()
     : running_(false), max_position_value_(100000.0), max_daily_loss_(5000.0)
-    , current_daily_pnl_(0.0), logger_("PositionRiskService") {
+    , current_daily_pnl_(0.0), logger_("PositionRiskService", StaticConfig::get_logger_endpoint()) {
 }
 
 PositionRiskService::~PositionRiskService() {

@@ -10,7 +10,7 @@ namespace hft {
 // MomentumStrategy Implementation
 MomentumStrategy::MomentumStrategy(uint64_t strategy_id)
     : strategy_id_(strategy_id)
-    , logger_("MomentumStrategy") {
+    , logger_("MomentumStrategy", StaticConfig::get_logger_endpoint()) {
     logger_.info("Initialized with ID: " + std::to_string(strategy_id));
 }
 
@@ -69,7 +69,7 @@ StrategyEngine::StrategyEngine()
     : running_(false)
     , market_data_processed_(0)
     , signals_generated_(0)
-    , logger_("StrategyEngine") {
+    , logger_("StrategyEngine", StaticConfig::get_logger_endpoint()) {
 }
 
 StrategyEngine::~StrategyEngine() {

@@ -1,5 +1,5 @@
 #include "low_latency_logger.h"
-#include "../common/config.h"
+#include "../common/static_config.h"
 #include <iostream>
 #include <signal.h>
 #include <thread>
@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     std::cout << "============================" << std::endl;
     
     std::string config_file = (argc > 1) ? argv[1] : "config/hft_config.conf";
-    GlobalConfig::instance().init(config_file);
+    StaticConfig::load_from_file(config_file.c_str());
     
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);

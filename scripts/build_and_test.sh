@@ -99,32 +99,74 @@ if pkg-config --exists libzmq; then
         print_warning "Unit tests executable not found"
     fi
     
-    # Offer to run integration test
+    # Offer test options
     echo
-    read -p "Run integration test? This will take 30 seconds (y/N): " -n 1 -r
+    echo "Test Options:"
+    echo "  1) Quick Test (30s) - Basic functionality validation"
+    echo "  2) Integration Test (60s) - Full system test with automatic service management"
+    echo "  3) Manual Integration Test (30s) - You manage services manually"
+    echo "  4) Skip tests"
     echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        print_status "Starting integration test..."
-        
-        # Start mock data generator in background
-        print_status "Starting mock data generator..."
-        ./mock_data_generator 35 100 &
-        MOCK_PID=$!
-        
-        # Give it time to start
-        sleep 2
-        
-        # Run integration test
-        print_status "Running integration test..."
-        timeout 32s ./integration_test 30
-        
-        # Clean up
-        if ps -p $MOCK_PID > /dev/null; then
-            kill $MOCK_PID 2>/dev/null || true
-        fi
-        
-        print_status "Integration test completed"
-    fi
+    read -p "Choose test option (1-4): " -n 1 -r
+    echo
+    
+    case $REPLY in
+        1)
+            print_status "Running quick test..."
+            if [ -f "../scripts/quick_test.sh" ]; then
+                ../scripts/quick_test.sh
+            else
+                print_warning "Quick test script not found, running basic checks..."
+                # Fallback basic test
+                ./test_message_types && print_status "Message types test passed" || print_warning "Message types test failed"
+            fi
+            ;;
+        2)
+            print_status "Running automated integration test..."
+            if [ -f "../scripts/run_integration_test.sh" ]; then
+                ../scripts/run_integration_test.sh -t 60
+            else
+                print_warning "Integration test script not found, falling back to manual test"
+                REPLY=3  # Fall through to manual test
+            fi
+            ;&  # Fall through if script not found
+        3)
+            if [ "$REPLY" = "3" ]; then
+                print_status "Running manual integration test..."
+                print_warning "Make sure to start services first!"
+                echo "  In separate terminals run:"
+                echo "    ./low_latency_logger"
+                echo "    ./mock_data_generator 35 100"
+                echo "    ./strategy_engine"
+                echo "    ./order_gateway"
+                echo "    ./position_risk_service"
+                echo
+                read -p "Services ready? Press Enter to start integration test..." -r
+            fi
+            
+            # Start mock data generator in background for manual test
+            print_status "Starting mock data generator..."
+            ./mock_data_generator 35 100 &
+            MOCK_PID=$!
+            
+            # Give it time to start
+            sleep 2
+            
+            # Run integration test
+            print_status "Running integration test..."
+            timeout 32s ./integration_test 30
+            
+            # Clean up
+            if ps -p $MOCK_PID > /dev/null; then
+                kill $MOCK_PID 2>/dev/null || true
+            fi
+            
+            print_status "Integration test completed"
+            ;;
+        4|*)
+            print_status "Skipping tests"
+            ;;
+    esac
     
     # Show available executables
     echo
@@ -132,7 +174,14 @@ if pkg-config --exists libzmq; then
     ls -la | grep -E "(market_data_handler|strategy_engine|order_gateway|position_risk_service|low_latency_logger|mock_data_generator|integration_test|unit_tests)" || true
     
     echo
-    print_status "To run the full system:"
+    print_status "Available helper scripts:"
+    echo "  ./scripts/quick_test.sh              # Fast system validation"
+    echo "  ./scripts/run_integration_test.sh    # Automated full system test"
+    echo "  ./scripts/start_core_services.sh     # Start all core services"
+    echo "  ./scripts/start_all_services.sh      # Start all services (including placeholders)"
+    echo "  ./scripts/stop_services.sh           # Stop all HFT services"
+    echo
+    print_status "Manual service management:"
     echo "  1. Start services in separate terminals:"
     echo "     ./build/low_latency_logger"
     echo "     ./build/mock_data_generator 60 100"
