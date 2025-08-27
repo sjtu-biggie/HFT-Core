@@ -343,13 +343,13 @@ private:
     
     std::string build_metrics_response() {
         std::string metrics_data = PrometheusExporter::export_metrics();
-        logger_.info("Metrics data: " + metrics_data);
+        
         std::ostringstream response;
-        response << "HTTP/1.1 200 OK\\r\\n";
-        response << "Content-Type: " << PrometheusExporter::get_content_type() << "\\r\\n";
-        response << "Access-Control-Allow-Origin: *\\r\\n";
-        response << "Content-Length: " << metrics_data.length() << "\\r\\n";
-        response << "\\r\\n";
+        response << "HTTP/1.1 200 OK\r\n";
+        response << "Content-Type: " << PrometheusExporter::get_content_type() << "\r\n";
+        response << "Access-Control-Allow-Origin: *\r\n";
+        response << "Content-Length: " << metrics_data.length() << "\r\n";
+        response << "\r\n";
         response << metrics_data;
         
         return response.str();
