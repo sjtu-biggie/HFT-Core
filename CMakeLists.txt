@@ -61,6 +61,9 @@ add_library(hft_common STATIC
 target_include_directories(hft_common PUBLIC src)
 target_link_libraries(hft_common ${ZMQ_LIBRARY} pthread)
 
+# Create alias for common library to match backtesting CMakeLists
+add_library(common_lib ALIAS hft_common)
+
 # Define executables for each service
 set(SERVICES
     market_data_handler
@@ -84,6 +87,9 @@ foreach(SERVICE ${SERVICES})
     endif()
 endforeach()
 
+# Add backtesting subdirectory
+add_subdirectory(src/backtesting)
+
 # Create test executables
 enable_testing()
 
@@ -104,6 +110,25 @@ target_link_libraries(test_logging hft_common ${ZMQ_LIBRARY} pthread)
 
 add_executable(test_config src/test/test_config.cpp)
 target_link_libraries(test_config hft_common ${ZMQ_LIBRARY} pthread)
+
+# Find Google Test for backtesting tests
+find_package(GTest QUIET)
+if(GTest_FOUND)
+    add_executable(test_backtesting_framework src/test/test_backtesting_framework.cpp)
+    target_link_libraries(test_backtesting_framework 
+        hft_common 
+        historical_data_player 
+        fill_simulator 
+        data_downloader
+        GTest::gtest 
+        GTest::gtest_main
+        ${ZMQ_LIBRARY} 
+        pthread
+    )
+    add_test(NAME test_backtesting_framework COMMAND test_backtesting_framework)
+else()
+    message(WARNING "Google Test not found. Backtesting framework tests will not be built.")
+endif()
 
 # Add tests to CTest
 add_test(NAME test_message_types COMMAND test_message_types)
