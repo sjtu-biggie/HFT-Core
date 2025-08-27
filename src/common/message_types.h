@@ -141,7 +141,9 @@ enum class ControlAction : uint8_t {
     PAUSE_TRADING = 3,
     RESTART_SERVICE = 4,
     SHUTDOWN_SYSTEM = 5,
-    UPDATE_CONFIG = 6
+    UPDATE_CONFIG = 6,
+    EMERGENCY_STOP = 7,
+    LIQUIDATE_ALL = 8
 };
 
 struct ControlCommand {

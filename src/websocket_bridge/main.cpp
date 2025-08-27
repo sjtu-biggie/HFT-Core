@@ -1,5 +1,7 @@
+#include "websocket_bridge.h"
 #include <iostream>
 #include <thread>
+#include <chrono>
 #include <signal.h>
 
 static bool g_running = true;
@@ -10,16 +12,29 @@ void signal_handler(int signal) {
 }
 
 int main() {
-    std::cout << "HFT WebSocket Bridge v1.0 (Placeholder)" << std::endl;
-    std::cout << "========================================" << std::endl;
+    std::cout << "HFT WebSocket Bridge v2.0" << std::endl;
+    std::cout << "=========================" << std::endl;
     
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
-    std::cout << "WebSocket Bridge is running (placeholder). Press Ctrl+C to stop." << std::endl;
-    
-    while (g_running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    try {
+        // Start the WebSocket bridge
+        start_websocket_bridge();
+        
+        std::cout << "WebSocket Bridge is running. Press Ctrl+C to stop." << std::endl;
+        
+        // Main loop
+        while (g_running && is_websocket_bridge_running()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        
+        // Clean shutdown
+        stop_websocket_bridge();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
     
     std::cout << "WebSocket Bridge shutdown complete." << std::endl;
