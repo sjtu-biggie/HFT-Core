@@ -103,6 +103,7 @@ struct MetricStats {
     double mean = 0.0;
     uint64_t p50 = 0;
     uint64_t p90 = 0;
+    uint64_t p95 = 0;
     uint64_t p99 = 0;
     uint64_t p999 = 0;
     

@@ -3,6 +3,7 @@
 #include "../common/message_types.h"
 #include "../common/logging.h"
 #include "../common/static_config.h"
+#include "../common/hft_metrics.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -58,6 +59,9 @@ private:
     void log_statistics();
     
     Logger logger_;
+    
+    // HFT Metrics tracking
+    ComponentThroughput throughput_tracker_;
 };
 
 } // namespace hft

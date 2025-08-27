@@ -149,6 +149,8 @@ public:
 // Cache-friendly atomic counter with padding to avoid false sharing
 template<typename T>
 class alignas(64) PaddedAtomic {
+    static_assert(sizeof(std::atomic<T>) <= 64, "PaddedAtomic: atomic type too large for 64-byte padding");
+    
 private:
     std::atomic<T> value_;
     char padding_[64 - sizeof(std::atomic<T>)];

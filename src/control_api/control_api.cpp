@@ -29,7 +29,7 @@ public:
         , zmq_publisher_(context_, ZMQ_PUB)
         , server_socket_(-1)
         , port_(8081)
-        , api_key_("hft-control-key-2025") {
+        , api_key_(get_api_key_from_env()) {
         
         // Set socket options for publishing
         int linger = 0;
@@ -124,6 +124,20 @@ private:
     
     std::unique_ptr<std::thread> server_thread_;
     
+    // Security helpers
+    static std::string get_api_key_from_env() {
+        const char* env_key = std::getenv("HFT_API_KEY");
+        if (env_key && strlen(env_key) > 0) {
+            return std::string(env_key);
+        }
+        // Fallback for development only - log warning
+        std::cerr << "WARNING: HFT_API_KEY environment variable not set. Using default key." << std::endl;
+        std::cerr << "         For production, set: export HFT_API_KEY=your-secure-key" << std::endl;
+        return "hft-control-key-2025";  // Development fallback
+    }
+    
+    static constexpr size_t MAX_REQUEST_SIZE = 8192;  // 8KB limit
+    
     void server_loop() {
         logger_.info("HTTP server thread started");
         
@@ -148,15 +162,27 @@ private:
     }
     
     void handle_request(int client_socket) {
-        char buffer[4096] = {0};
-        ssize_t bytes_read = read(client_socket, buffer, sizeof(buffer) - 1);
+        // Set socket timeout for security
+        struct timeval timeout;
+        timeout.tv_sec = 5;  // 5 second timeout
+        timeout.tv_usec = 0;
+        setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        
+        std::vector<char> buffer(MAX_REQUEST_SIZE);
+        ssize_t bytes_read = read(client_socket, buffer.data(), buffer.size() - 1);
         
         if (bytes_read <= 0) {
             send_response(client_socket, 400, "Bad Request", "Invalid request");
             return;
         }
         
-        std::string request(buffer, bytes_read);
+        if (static_cast<size_t>(bytes_read) >= buffer.size() - 1) {
+            send_response(client_socket, 413, "Request Entity Too Large", "Request too large");
+            return;
+        }
+        
+        buffer[bytes_read] = '\0';  // Null terminate
+        std::string request(buffer.data(), bytes_read);
         
         // Parse HTTP request
         auto request_info = parse_http_request(request);

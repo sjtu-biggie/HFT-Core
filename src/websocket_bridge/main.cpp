@@ -1,4 +1,5 @@
 #include "websocket_bridge.h"
+#include "../common/hft_metrics.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -19,6 +20,10 @@ int main() {
     signal(SIGTERM, signal_handler);
     
     try {
+        // Initialize HFT metrics system
+        std::cout << "Initializing HFT metrics system..." << std::endl;
+        hft::initialize_hft_metrics();
+        
         // Start the WebSocket bridge
         start_websocket_bridge();
         
@@ -31,6 +36,10 @@ int main() {
         
         // Clean shutdown
         stop_websocket_bridge();
+        
+        // Shutdown metrics system
+        std::cout << "Shutting down HFT metrics system..." << std::endl;
+        hft::shutdown_hft_metrics();
         
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

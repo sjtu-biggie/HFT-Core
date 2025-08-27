@@ -164,6 +164,12 @@ void initialize_high_performance_trading() {
 
 void set_thread_for_market_data() {
     // Dedicate CPU core 0 for market data processing
+    int cpu_count = CPUAffinity::get_cpu_count();
+    if (cpu_count < 1) {
+        std::cerr << "Error: No CPUs available" << std::endl;
+        return;
+    }
+    
     if (CPUAffinity::set_thread_affinity(0)) {
         std::cout << "Market data thread pinned to CPU 0" << std::endl;
     } else {
@@ -173,6 +179,13 @@ void set_thread_for_market_data() {
 
 void set_thread_for_trading_engine() {
     // Dedicate CPU core 1 for trading engine
+    int cpu_count = CPUAffinity::get_cpu_count();
+    if (cpu_count < 2) {
+        std::cerr << "Warning: Less than 2 CPUs available, using CPU 0" << std::endl;
+        CPUAffinity::set_thread_affinity(0);
+        return;
+    }
+    
     if (CPUAffinity::set_thread_affinity(1)) {
         std::cout << "Trading engine thread pinned to CPU 1" << std::endl;
     } else {
@@ -182,10 +195,17 @@ void set_thread_for_trading_engine() {
 
 void set_thread_for_order_gateway() {
     // Dedicate CPU core 2 for order gateway
-    if (CPUAffinity::set_thread_affinity(2)) {
-        std::cout << "Order gateway thread pinned to CPU 2" << std::endl;
+    int cpu_count = CPUAffinity::get_cpu_count();
+    int target_cpu = (cpu_count >= 3) ? 2 : (cpu_count - 1);
+    
+    if (cpu_count < 3) {
+        std::cerr << "Warning: Less than 3 CPUs available, using CPU " << target_cpu << std::endl;
+    }
+    
+    if (CPUAffinity::set_thread_affinity(target_cpu)) {
+        std::cout << "Order gateway thread pinned to CPU " << target_cpu << std::endl;
     } else {
-        std::cout << "Warning: Failed to pin order gateway thread to CPU 2" << std::endl;
+        std::cout << "Warning: Failed to pin order gateway thread to CPU " << target_cpu << std::endl;
     }
 }
 

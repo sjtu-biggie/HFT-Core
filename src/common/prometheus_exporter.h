@@ -1,6 +1,7 @@
 #pragma once
 
 #include "metrics_collector.h"
+#include "hft_metrics.h"
 #include <string>
 #include <sstream>
 #include <map>
@@ -105,7 +106,7 @@ private:
         
         output << "# HELP hft_" << name << "_p95_nanoseconds 95th percentile latency\\n";
         output << "# TYPE hft_" << name << "_p95_nanoseconds gauge\\n";
-        output << "hft_" << name << "_p95_nanoseconds " << stats.p90 << "\\n";
+        output << "hft_" << name << "_p95_nanoseconds " << stats.p95 << "\\n";
         
         output << "# HELP hft_" << name << "_p99_nanoseconds 99th percentile latency\\n";
         output << "# TYPE hft_" << name << "_p99_nanoseconds gauge\\n";
@@ -146,46 +147,159 @@ private:
     }
     
     static void add_hft_specific_metrics(std::ostringstream& output) {
-        // Trading-specific metrics
-        output << "# HELP hft_trades_executed_total Total number of trades executed\\n";
-        output << "# TYPE hft_trades_executed_total counter\\n";
-        output << "hft_trades_executed_total 0\\n";  // Would be populated from actual data
+        auto& collector = MetricsCollector::instance();
+        auto stats = collector.get_statistics();
         
-        output << "# HELP hft_positions_open Current number of open positions\\n";
-        output << "# TYPE hft_positions_open gauge\\n";
-        output << "hft_positions_open 0\\n";  // Would be populated from position service
+        // Export critical latency metrics with proper buckets
+        add_hft_latency_metrics(output, stats);
         
-        output << "# HELP hft_pnl_total_usd Total P&L in USD\\n";
-        output << "# TYPE hft_pnl_total_usd gauge\\n";
-        output << "hft_pnl_total_usd 0.0\\n";  // Would be populated from position service
+        // Export throughput metrics  
+        add_hft_throughput_metrics(output, stats);
         
-        output << "# HELP hft_market_data_messages_received_total Market data messages received\\n";
-        output << "# TYPE hft_market_data_messages_received_total counter\\n";
-        output << "hft_market_data_messages_received_total 0\\n";
+        // Export trading performance metrics
+        add_hft_trading_metrics(output, stats);
         
-        output << "# HELP hft_orders_sent_total Orders sent to broker\\n";
-        output << "# TYPE hft_orders_sent_total counter\\n";
-        output << "hft_orders_sent_total 0\\n";
+        // Export system health metrics
+        add_hft_system_metrics(output, stats);
         
-        output << "# HELP hft_system_status System operational status (1=healthy, 0=degraded)\\n";
-        output << "# TYPE hft_system_status gauge\\n";
-        output << "hft_system_status{component=\\\"market_data\\\"} 1\\n";
-        output << "hft_system_status{component=\\\"strategy_engine\\\"} 1\\n";
-        output << "hft_system_status{component=\\\"order_gateway\\\"} 1\\n";
-        output << "hft_system_status{component=\\\"position_service\\\"} 1\\n";
+        // Export component status
+        add_hft_component_status(output);
+    }
+    
+    static void add_hft_latency_metrics(std::ostringstream& output, const auto& stats) {
+        // Critical path latencies with appropriate buckets for HFT
+        std::vector<std::string> critical_latencies = {
+            "e2e.tick_to_signal_ns", "e2e.tick_to_order_ns", "e2e.tick_to_fill_ns",
+            "md.total_latency_ns", "strategy.total_latency_ns", "order.total_latency_ns"
+        };
         
-        // Network and system metrics
-        output << "# HELP hft_network_packets_dropped_total Network packets dropped\\n";
-        output << "# TYPE hft_network_packets_dropped_total counter\\n";
-        output << "hft_network_packets_dropped_total 0\\n";
+        for (const auto& metric_name : critical_latencies) {
+            auto it = stats.find(metric_name);
+            if (it != stats.end() && it->second.type == MetricType::LATENCY) {
+                export_hft_latency_histogram(output, metric_name, it->second);
+            }
+        }
+    }
+    
+    static void add_hft_throughput_metrics(std::ostringstream& output, const auto& stats) {
+        // Message throughput metrics
+        std::vector<std::pair<std::string, std::string>> throughput_metrics = {
+            {"md.messages_per_second", "Market data messages per second"},
+            {"strategy.decisions_per_second", "Strategy decisions per second"}, 
+            {"orders.per_second", "Orders per second"}
+        };
         
-        output << "# HELP hft_memory_usage_bytes Memory usage in bytes\\n";
-        output << "# TYPE hft_memory_usage_bytes gauge\\n";
-        output << "hft_memory_usage_bytes 0\\n";  // Would get from system
+        for (const auto& [metric_name, help_text] : throughput_metrics) {
+            auto it = stats.find(metric_name);
+            if (it != stats.end()) {
+                output << "# HELP hft_" << sanitize_metric_name(metric_name) << " " << help_text << "\\n";
+                output << "# TYPE hft_" << sanitize_metric_name(metric_name) << " gauge\\n";
+                output << "hft_" << sanitize_metric_name(metric_name) << " " << it->second.max_value << "\\n";
+            }
+        }
+    }
+    
+    static void add_hft_trading_metrics(std::ostringstream& output, const auto& stats) {
+        // Trading performance
+        output << "# HELP hft_trading_positions_open Current open positions\\n";
+        output << "# TYPE hft_trading_positions_open gauge\\n";
+        auto it = stats.find("trading.positions_open");
+        output << "hft_trading_positions_open " << (it != stats.end() ? it->second.max_value : 0) << "\\n";
         
-        output << "# HELP hft_cpu_usage_percent CPU usage percentage\\n";
-        output << "# TYPE hft_cpu_usage_percent gauge\\n";
-        output << "hft_cpu_usage_percent 0.0\\n";  // Would get from system
+        output << "# HELP hft_trading_pnl_total_usd Total P&L in USD\\n";
+        output << "# TYPE hft_trading_pnl_total_usd gauge\\n";
+        it = stats.find("trading.pnl_total_usd");
+        output << "hft_trading_pnl_total_usd " << (it != stats.end() ? it->second.sum : 0) << "\\n";
+        
+        output << "# HELP hft_trading_fill_rate_percent Order fill rate percentage\\n";
+        output << "# TYPE hft_trading_fill_rate_percent gauge\\n";
+        it = stats.find("trading.fill_rate_percent");
+        output << "hft_trading_fill_rate_percent " << (it != stats.end() ? it->second.max_value : 100) << "\\n";
+    }
+    
+    static void add_hft_system_metrics(std::ostringstream& output, const auto& stats) {
+        // System resource utilization  
+        output << "# HELP hft_system_memory_rss_mb RSS memory usage in MB\\n";
+        output << "# TYPE hft_system_memory_rss_mb gauge\\n";
+        auto it = stats.find("system.memory_rss_mb");
+        output << "hft_system_memory_rss_mb " << (it != stats.end() ? it->second.max_value : 0) << "\\n";
+        
+        output << "# HELP hft_system_cpu_usage_percent CPU usage percentage\\n";
+        output << "# TYPE hft_system_cpu_usage_percent gauge\\n";
+        it = stats.find("system.cpu_usage_percent");
+        output << "hft_system_cpu_usage_percent " << (it != stats.end() ? it->second.max_value : 0) << "\\n";
+        
+        output << "# HELP hft_system_thread_count Active thread count\\n";
+        output << "# TYPE hft_system_thread_count gauge\\n";
+        it = stats.find("system.thread_count");
+        output << "hft_system_thread_count " << (it != stats.end() ? it->second.max_value : 1) << "\\n";
+        
+        // Network metrics
+        output << "# HELP hft_network_bytes_received_total Network bytes received\\n";
+        output << "# TYPE hft_network_bytes_received_total counter\\n";
+        it = stats.find("network.bytes_received_total");
+        output << "hft_network_bytes_received_total " << (it != stats.end() ? it->second.sum : 0) << "\\n";
+    }
+    
+    static void add_hft_component_status(std::ostringstream& output) {
+        // Component health status - would be updated by actual components
+        output << "# HELP hft_component_status Component operational status (1=healthy, 0=degraded)\\n";
+        output << "# TYPE hft_component_status gauge\\n";
+        output << "hft_component_status{component=\\\"market_data_handler\\\"} 1\\n";
+        output << "hft_component_status{component=\\\"strategy_engine\\\"} 1\\n";
+        output << "hft_component_status{component=\\\"order_gateway\\\"} 1\\n";  
+        output << "hft_component_status{component=\\\"position_risk_service\\\"} 1\\n";
+        output << "hft_component_status{component=\\\"logger\\\"} 1\\n";
+        
+        // Service uptime
+        output << "# HELP hft_service_uptime_seconds Service uptime in seconds\\n";
+        output << "# TYPE hft_service_uptime_seconds gauge\\n";
+        auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        output << "hft_service_uptime_seconds " << uptime << "\\n";
+    }
+    
+    static void export_hft_latency_histogram(std::ostringstream& output, const std::string& name, const MetricStats& stats) {
+        std::string sanitized_name = sanitize_metric_name(name);
+        
+        // HFT-specific latency buckets (nanoseconds) - much tighter for trading systems
+        std::vector<uint64_t> hft_buckets = {
+            100, 250, 500, 1000,     // Sub-microsecond (100ns - 1μs)
+            2500, 5000, 10000,       // Low microsecond (2.5μs - 10μs) 
+            25000, 50000, 100000,    // High microsecond (25μs - 100μs)
+            250000, 500000,          // Sub-millisecond (250μs - 500μs)
+            1000000, 10000000        // Millisecond+ (1ms - 10ms)
+        };
+        
+        output << "# HELP hft_" << sanitized_name << "_histogram HFT latency distribution\\n";
+        output << "# TYPE hft_" << sanitized_name << "_histogram histogram\\n";
+        
+        // Estimate bucket counts based on percentiles
+        uint64_t cumulative = 0;
+        for (uint64_t bucket : hft_buckets) {
+            uint64_t bucket_count = 0;
+            if (bucket >= stats.p99) bucket_count = stats.count;
+            else if (bucket >= stats.p95) bucket_count = stats.count * 99 / 100;
+            else if (bucket >= stats.p90) bucket_count = stats.count * 95 / 100;
+            else if (bucket >= stats.p50) bucket_count = stats.count * 90 / 100;
+            else if (bucket >= stats.min_value) bucket_count = stats.count * 50 / 100;
+            
+            output << "hft_" << sanitized_name << "_histogram_bucket{le=\\\""
+                   << bucket << "\\\"} " << bucket_count << "\\n";
+        }
+        
+        output << "hft_" << sanitized_name << "_histogram_bucket{le=\\\"+Inf\\\"} " << stats.count << "\\n";
+        output << "hft_" << sanitized_name << "_histogram_count " << stats.count << "\\n";
+        output << "hft_" << sanitized_name << "_histogram_sum " << stats.sum << "\\n";
+        
+        // Also export key percentiles as separate gauges for alerting
+        output << "# HELP hft_" << sanitized_name << "_p50_ns 50th percentile latency\\n";
+        output << "# TYPE hft_" << sanitized_name << "_p50_ns gauge\\n";
+        output << "hft_" << sanitized_name << "_p50_ns " << stats.p50 << "\\n";
+        
+        output << "# HELP hft_" << sanitized_name << "_p99_ns 99th percentile latency\\n";
+        output << "# TYPE hft_" << sanitized_name << "_p99_ns gauge\\n";
+        output << "hft_" << sanitized_name << "_p99_ns " << stats.p99 << "\\n";
     }
     
     static std::string sanitize_metric_name(const std::string& name) {

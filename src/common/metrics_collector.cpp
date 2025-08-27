@@ -249,7 +249,7 @@ std::string MetricsCollector::export_to_csv() const {
     std::ostringstream oss;
     
     // CSV header
-    oss << "metric_name,type,count,min_ns,max_ns,mean_ns,p50_ns,p90_ns,p99_ns,p999_ns\n";
+    oss << "metric_name,type,count,min_ns,max_ns,mean_ns,p50_ns,p90_ns,p95_ns,p99_ns,p999_ns\n";
     
     for (const auto& [name, metric] : stats) {
         oss << name << ","
@@ -260,6 +260,7 @@ std::string MetricsCollector::export_to_csv() const {
             << static_cast<uint64_t>(metric.mean) << ","
             << metric.p50 << ","
             << metric.p90 << ","
+            << metric.p95 << ","
             << metric.p99 << ","
             << metric.p999 << "\n";
     }
@@ -287,6 +288,7 @@ std::string MetricsCollector::export_to_json() const {
             << "      \"mean_ns\": " << static_cast<uint64_t>(metric.mean) << ",\n"
             << "      \"p50_ns\": " << metric.p50 << ",\n"
             << "      \"p90_ns\": " << metric.p90 << ",\n"
+            << "      \"p95_ns\": " << metric.p95 << ",\n"
             << "      \"p99_ns\": " << metric.p99 << ",\n"
             << "      \"p999_ns\": " << metric.p999 << "\n"
             << "    }";
@@ -326,6 +328,7 @@ void MetricStats::calculate_percentiles() {
     size_t size = sorted_values.size();
     p50 = sorted_values[size * 50 / 100];
     p90 = sorted_values[size * 90 / 100];
+    p95 = sorted_values[size * 95 / 100];
     p99 = sorted_values[size * 99 / 100];
     p999 = sorted_values[size * 999 / 1000];
 }
