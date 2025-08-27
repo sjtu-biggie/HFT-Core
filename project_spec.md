@@ -565,3 +565,7 @@ Upon successful completion, the project will serve as a powerful portfolio piece
 * Connecting to dashboard
 ** Brainstorm functionality and control API we should have for the dashbaord 
 ** Define interface between them
+* For metrics to show
+** live trading event
+** latency metrics per compoenet
+** How do they interact? Poll or event based?

@@ -6,7 +6,7 @@
 namespace hft {
 
 OrderGateway::OrderGateway()
-    : running_(false), next_order_id_(1), orders_processed_(0), orders_filled_(0)
+    : running_(false), next_order_id_(1), use_alpaca_(false), orders_processed_(0), orders_filled_(0)
     , logger_("OrderGateway", StaticConfig::get_logger_endpoint()) {
 }
 
@@ -16,8 +16,6 @@ OrderGateway::~OrderGateway() {
 
 bool OrderGateway::initialize() {
     logger_.info("Initializing Order Gateway");
-    
-    config_ = std::make_unique<Config>();
     
     try {
         context_ = std::make_unique<zmq::context_t>(1);
@@ -37,7 +35,32 @@ bool OrderGateway::initialize() {
         execution_publisher_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         execution_publisher_->bind(StaticConfig::get_executions_endpoint());
         
-        logger_.info("Order Gateway initialized in paper trading mode");
+        // Initialize Alpaca client if trading is enabled and not in paper mode
+        if (StaticConfig::get_trading_enabled() && !StaticConfig::get_paper_trading()) {
+            alpaca_client_ = std::make_unique<AlpacaClient>();
+            
+            // Try to load Alpaca credentials from environment variables
+            const char* api_key = std::getenv("ALPACA_API_KEY");
+            const char* api_secret = std::getenv("ALPACA_API_SECRET");
+            const char* base_url = std::getenv("ALPACA_BASE_URL");
+            
+            if (api_key && api_secret) {
+                std::string url = base_url ? base_url : "https://paper-api.alpaca.markets";
+                if (alpaca_client_->initialize(api_key, api_secret, url)) {
+                    use_alpaca_ = true;
+                    logger_.info("Alpaca client initialized successfully");
+                } else {
+                    logger_.warning("Failed to initialize Alpaca client, falling back to paper trading");
+                    use_alpaca_ = false;
+                }
+            } else {
+                logger_.warning("Alpaca credentials not found, using paper trading mode");
+                use_alpaca_ = false;
+            }
+        }
+        
+        std::string mode = use_alpaca_ ? "live trading (Alpaca)" : "paper trading";
+        logger_.info("Order Gateway initialized in " + mode + " mode");
         return true;
         
     } catch (const zmq::error_t& e) {
@@ -131,11 +154,12 @@ void OrderGateway::handle_trading_signal(const TradingSignal& signal) {
     active_orders_[order_id] = order;
     orders_processed_++;
     
-    // Simulate order processing in paper trading mode
-    if (config_->get_bool(GlobalConfig::PAPER_TRADING, true)) {
+    // Route to appropriate execution method
+    if (use_alpaca_) {
+        handle_alpaca_order(active_orders_[order_id]);
+    } else {
         simulate_order_fill(order);
     }
-    // TODO: Add real broker integration for live trading
 }
 
 void OrderGateway::simulate_order_fill(const Order& order) {
@@ -171,6 +195,69 @@ void OrderGateway::simulate_order_fill(const Order& order) {
     // Remove from active orders
     active_orders_.erase(order.order_id);
     orders_filled_++;
+}
+
+void OrderGateway::handle_alpaca_order(Order& order) {
+    if (!alpaca_client_ || !alpaca_client_->is_connected()) {
+        logger_.error("Alpaca client not available, falling back to paper trading");
+        simulate_order_fill(order);
+        return;
+    }
+    
+    try {
+        AlpacaOrderResponse response;
+        std::string side = (order.action == SignalAction::BUY) ? "buy" : "sell";
+        
+        // Submit order to Alpaca
+        if (order.type == OrderType::MARKET) {
+            response = alpaca_client_->submit_market_order(order.symbol, side, order.quantity);
+        } else if (order.type == OrderType::LIMIT) {
+            response = alpaca_client_->submit_limit_order(order.symbol, side, order.quantity, order.price);
+        } else {
+            logger_.error("Unsupported order type for Alpaca: " + std::to_string(static_cast<int>(order.type)));
+            simulate_order_fill(order);
+            return;
+        }
+        
+        if (!response.is_success()) {
+            logger_.error("Alpaca order failed: " + response.error_message + ", falling back to paper trading");
+            simulate_order_fill(order);
+            return;
+        }
+        
+        // Store external order ID
+        order.external_order_id = response.order_id;
+        active_orders_[order.order_id] = order;
+        
+        logger_.info("Alpaca order submitted: " + response.order_id);
+        
+        // Check if order was immediately filled
+        if (response.is_filled()) {
+            // Create execution report
+            OrderExecution execution{};
+            execution.header = MessageFactory::create_header(MessageType::ORDER_EXECUTION, 
+                                                            sizeof(OrderExecution) - sizeof(MessageHeader));
+            execution.order_id = order.order_id;
+            std::strncpy(execution.symbol, order.symbol.c_str(), sizeof(execution.symbol) - 1);
+            execution.exec_type = ExecutionType::FILL;
+            execution.fill_price = response.fill_price;
+            execution.fill_quantity = static_cast<uint32_t>(response.filled_qty);
+            execution.remaining_quantity = static_cast<uint32_t>(response.quantity - response.filled_qty);
+            execution.commission = response.filled_qty * 0.001; // Estimate commission
+            
+            publish_execution(execution);
+            
+            // Remove from active orders if fully filled
+            if (execution.remaining_quantity == 0) {
+                active_orders_.erase(order.order_id);
+                orders_filled_++;
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        logger_.error("Exception in Alpaca order handling: " + std::string(e.what()) + ", falling back to paper trading");
+        simulate_order_fill(order);
+    }
 }
 
 void OrderGateway::publish_execution(const OrderExecution& execution) {
