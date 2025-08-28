@@ -220,7 +220,7 @@ fi
 cd build
 
 # Check executables exist
-REQUIRED_EXECUTABLES=("integration_test" "low_latency_logger" "mock_data_generator" "strategy_engine" "order_gateway" "position_risk_service")
+REQUIRED_EXECUTABLES=("integration_test" "low_latency_logger" "market_data_handler" "strategy_engine" "order_gateway" "position_risk_service")
 
 if [ "$SERVICES_MODE" == "all" ]; then
     REQUIRED_EXECUTABLES+=("websocket_bridge" "control_api")
@@ -258,7 +258,8 @@ if [ "$SERVICES_MODE" == "all" ]; then
 fi
 
 # Start core trading services
-start_service "mock_data_generator" "./mock_data_generator" "$MOCK_DURATION $MOCK_FREQUENCY"
+# start_service "mock_data_generator" "./mock_data_generator" "$MOCK_DURATION $MOCK_FREQUENCY"
+start_service "market_data_handler" "./market_data_handler"
 sleep 3  # Give data generator more time to establish
 
 start_service "strategy_engine" "./strategy_engine"

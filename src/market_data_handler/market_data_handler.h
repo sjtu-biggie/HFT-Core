@@ -31,13 +31,16 @@ public:
 
 private:
     
-    // ZeroMQ context and publisher socket
+    // ZeroMQ context and sockets
     std::unique_ptr<zmq::context_t> context_;
     std::unique_ptr<zmq::socket_t> publisher_;
+    std::unique_ptr<zmq::socket_t> control_subscriber_;
     
     // Processing control
     std::atomic<bool> running_;
+    std::atomic<bool> paused_;
     std::unique_ptr<std::thread> processing_thread_;
+    std::unique_ptr<std::thread> control_thread_;
     
     // Statistics
     std::atomic<uint64_t> messages_processed_;
@@ -45,6 +48,10 @@ private:
     
     // Main processing loop
     void process_market_data();
+    
+    // Control message processing
+    void process_control_messages();
+    void handle_control_command(const ControlCommand& command);
     
     // DPDK-specific functions (proof-of-concept)
     bool initialize_dpdk();
