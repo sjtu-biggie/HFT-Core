@@ -1,4 +1,10 @@
 #include "market_data_handler.h"
+
+#include "../common/static_config.h"
+#include "../common/hft_metrics.h"
+#include "../common/metrics_collector.h"
+#include "../common/metrics_publisher.h"
+
 #include <chrono>
 #include <random>
 #include <iostream>
@@ -9,7 +15,9 @@ MarketDataHandler::MarketDataHandler()
     : running_(false)
     , messages_processed_(0)
     , bytes_processed_(0)
-    , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) {
+    , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) 
+    , throughput_tracker_(hft::metrics::MD_MESSAGES_RECEIVED, hft::metrics::MD_MESSAGES_PER_SEC)
+    , metrics_publisher_("MarketDataHandler", "tcp://*:5562") {
 }
 
 MarketDataHandler::~MarketDataHandler() {
@@ -18,6 +26,15 @@ MarketDataHandler::~MarketDataHandler() {
 
 bool MarketDataHandler::initialize() {
     logger_.info("Initializing Market Data Handler");
+    
+    MetricsCollector::instance().initialize();
+    StaticConfig::load_from_file("config/hft_config.conf");
+
+    // Initialize metrics publisher
+    if (!metrics_publisher_.initialize()) {
+        logger_.error("Failed to initialize metrics publisher");
+        return false;
+    }
     
     try {
         // Initialize ZeroMQ context and publisher
@@ -64,6 +81,9 @@ void MarketDataHandler::start() {
     logger_.info("Starting Market Data Handler");
     running_.store(true);
     
+    // Start metrics publisher
+    metrics_publisher_.start();
+    
     // Start processing thread
     processing_thread_ = std::make_unique<std::thread>(&MarketDataHandler::process_market_data, this);
     
@@ -77,6 +97,9 @@ void MarketDataHandler::stop() {
     
     logger_.info("Stopping Market Data Handler");
     running_.store(false);
+    
+    // Stop metrics publisher
+    metrics_publisher_.stop();
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();
@@ -104,10 +127,7 @@ void MarketDataHandler::process_market_data() {
     while (running_.load()) {
         if (StaticConfig::get_enable_dpdk()) {
             // Process DPDK packets if available
-            if (!process_dpdk_packets()) {
-                // Fall back to mock data if no packets
-                generate_mock_data();
-            }
+            process_dpdk_packets();
         } else {
             // Use mock data for testing
             generate_mock_data();
@@ -146,6 +166,8 @@ bool MarketDataHandler::initialize_dpdk() {
 }
 
 bool MarketDataHandler::process_dpdk_packets() {
+    HFT_RDTSC_TIMER(hft::metrics::MD_TOTAL_LATENCY);
+    
     // This is a proof-of-concept placeholder for DPDK packet processing
     // In a real implementation, this would:
     // 1. Poll network interface for new packets
@@ -158,6 +180,8 @@ bool MarketDataHandler::process_dpdk_packets() {
 }
 
 void MarketDataHandler::generate_mock_data() {
+    HFT_RDTSC_TIMER(hft::metrics::MD_TOTAL_LATENCY);
+    
     static std::random_device rd;
     static std::mt19937 gen(rd());
     static std::uniform_real_distribution<> price_dist(100.0, 500.0);
@@ -171,44 +195,64 @@ void MarketDataHandler::generate_mock_data() {
     
     static std::uniform_int_distribution<> symbol_dist(0, symbols.size() - 1);
     
-    // Generate market data for a random symbol
-    std::string symbol = symbols[symbol_dist(gen)];
-    double mid_price = price_dist(gen);
-    double spread = spread_dist(gen);
-    
-    double bid_price = mid_price - spread / 2.0;
-    double ask_price = mid_price + spread / 2.0;
-    uint32_t bid_size = size_dist(gen);
-    uint32_t ask_size = size_dist(gen);
-    
-    // Create last trade
-    double last_price = bid_price + (ask_price - bid_price) * 
-                       std::uniform_real_distribution<>(0.0, 1.0)(gen);
-    uint32_t last_size = std::uniform_int_distribution<>(100, 1000)(gen);
-    
-    MarketData data = MessageFactory::create_market_data(
-        symbol, bid_price, ask_price, bid_size, ask_size, last_price, last_size
-    );
-    
-    publish_market_data(data);
+    // Track data generation latency
+    {
+        HFT_RDTSC_TIMER(hft::metrics::MD_PARSE_LATENCY);
+        
+        // Generate market data for a random symbol
+        std::string symbol = symbols[symbol_dist(gen)];
+        double mid_price = price_dist(gen);
+        double spread = spread_dist(gen);
+        
+        double bid_price = mid_price - spread / 2.0;
+        double ask_price = mid_price + spread / 2.0;
+        uint32_t bid_size = size_dist(gen);
+        uint32_t ask_size = size_dist(gen);
+        
+        // Create last trade
+        double last_price = bid_price + (ask_price - bid_price) * 
+                           std::uniform_real_distribution<>(0.0, 1.0)(gen);
+        uint32_t last_size = std::uniform_int_distribution<>(100, 1000)(gen);
+        
+        MarketData data = MessageFactory::create_market_data(
+            symbol, bid_price, ask_price, bid_size, ask_size, last_price, last_size
+        );
+        
+        // Track message generation metrics
+        HFT_COMPONENT_COUNTER(hft::metrics::MD_MESSAGES_PROCESSED);
+        throughput_tracker_.increment();
+        
+        publish_market_data(data);
+    }
 }
 
 void MarketDataHandler::publish_market_data(const MarketData& data) {
+    HFT_RDTSC_TIMER(hft::metrics::MD_PUBLISH_LATENCY);
+    
     try {
         zmq::message_t message(sizeof(MarketData));
         std::memcpy(message.data(), &data, sizeof(MarketData));
         
-        publisher_->send(message, zmq::send_flags::dontwait);
+        {
+            publisher_->send(message, zmq::send_flags::dontwait);
+        }
         
         messages_processed_++;
         bytes_processed_ += sizeof(MarketData);
         
+        // Update HFT metrics
+        HFT_COMPONENT_COUNTER(hft::metrics::MD_MESSAGES_PUBLISHED);
+        HFT_GAUGE_VALUE(hft::metrics::MD_BYTES_RECEIVED, bytes_processed_.load());
+        
     } catch (const zmq::error_t& e) {
         if (e.num() != EAGAIN) {  // EAGAIN is expected with dontwait
             logger_.error("Failed to publish market data: " + std::string(e.what()));
+            HFT_COMPONENT_COUNTER(hft::metrics::MD_MESSAGES_DROPPED);
         }
     }
 }
+
+
 
 void MarketDataHandler::log_statistics() {
     uint64_t msg_count = messages_processed_.load();

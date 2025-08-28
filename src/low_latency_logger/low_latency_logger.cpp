@@ -54,7 +54,7 @@ bool LowLatencyLogger::initialize() {
         
         // Initialize io_uring if available and enabled
 #ifdef HAS_IO_URING
-        if (config_->get_bool(GlobalConfig::ENABLE_IO_URING)) {
+        if (StaticConfig::get_enable_io_uring()) {
             init_io_uring();
         }
 #endif

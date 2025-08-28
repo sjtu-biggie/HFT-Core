@@ -95,6 +95,7 @@ private:
 // Statistics for a metric
 struct MetricStats {
     std::string name;
+    std::string service_name;  // Service that produced this metric
     MetricType type;
     uint64_t count = 0;
     uint64_t min_value = UINT64_MAX;
@@ -103,6 +104,7 @@ struct MetricStats {
     double mean = 0.0;
     uint64_t p50 = 0;
     uint64_t p90 = 0;
+    uint64_t p95 = 0;
     uint64_t p99 = 0;
     uint64_t p999 = 0;
     
@@ -130,6 +132,12 @@ struct MetricStats {
     
 private:
     void calculate_percentiles();
+    
+    friend std::ostream& operator<<(std::ostream& os, const MetricStats& stats) {
+        os << stats.name << ": count=" << stats.count << " mean=" << stats.mean 
+           << " p50=" << stats.p50 << " p95=" << stats.p95 << " p99=" << stats.p99;
+        return os;
+    }
 };
 
 // Main metrics collection system
@@ -227,38 +235,5 @@ private:
 #define HFT_METRICS_COUNTER(label) hft::MetricsCollector::instance().increment_counter(label)
 #define HFT_METRICS_GAUGE(label, value) hft::MetricsCollector::instance().set_gauge(label, value)
 #define HFT_METRICS_HISTOGRAM(label, value) hft::MetricsCollector::instance().record_histogram_value(label, value)
-
-// Strategic timing points for HFT critical paths
-namespace metrics {
-    // Market data path
-    constexpr const char* MARKET_DATA_RECEIVE = "market_data.receive_latency";
-    constexpr const char* MARKET_DATA_PARSE = "market_data.parse_latency";
-    constexpr const char* MARKET_DATA_PUBLISH = "market_data.publish_latency";
-    
-    // Strategy path
-    constexpr const char* STRATEGY_PROCESS = "strategy.process_latency";
-    constexpr const char* SIGNAL_GENERATION = "strategy.signal_generation_latency";
-    constexpr const char* SIGNAL_PUBLISH = "strategy.signal_publish_latency";
-    
-    // Order path
-    constexpr const char* ORDER_RECEIVE = "order.receive_latency";
-    constexpr const char* ORDER_PROCESS = "order.process_latency";
-    constexpr const char* ORDER_SEND = "order.send_latency";
-    
-    // End-to-end timing
-    constexpr const char* TICK_TO_SIGNAL = "e2e.tick_to_signal_latency";
-    constexpr const char* SIGNAL_TO_ORDER = "e2e.signal_to_order_latency";
-    constexpr const char* TICK_TO_ORDER = "e2e.tick_to_order_latency";
-    
-    // Throughput counters
-    constexpr const char* MARKET_DATA_MESSAGES = "throughput.market_data_messages";
-    constexpr const char* SIGNALS_GENERATED = "throughput.signals_generated";
-    constexpr const char* ORDERS_PROCESSED = "throughput.orders_processed";
-    
-    // System health gauges
-    constexpr const char* MEMORY_USAGE = "system.memory_usage_mb";
-    constexpr const char* CPU_USAGE = "system.cpu_usage_percent";
-    constexpr const char* QUEUE_DEPTH = "system.queue_depth";
-}
 
 } // namespace hft

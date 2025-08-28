@@ -39,11 +39,31 @@ if(NOT URING_INCLUDE_DIR OR NOT URING_LIBRARY)
     message(WARNING "liburing not found. Install liburing-dev for io_uring support")
 endif()
 
+# Find JSON library for order gateway
+pkg_check_modules(JSONCPP REQUIRED jsoncpp)
+
+# Find libcurl for order gateway
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBCURL REQUIRED libcurl)
+
+# Find NUMA library for CPU affinity optimizations
+find_path(NUMA_INCLUDE_DIR numa.h)
+find_library(NUMA_LIBRARY NAMES numa libnuma)
+
+if(NOT NUMA_INCLUDE_DIR OR NOT NUMA_LIBRARY)
+    message(WARNING "NUMA library not found. Install libnuma-dev for NUMA support")
+endif()
+
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${ZMQ_INCLUDE_DIR})
 if(URING_INCLUDE_DIR)
     include_directories(${URING_INCLUDE_DIR})
+endif()
+include_directories(${JSONCPP_INCLUDE_DIRS})
+include_directories(${LIBCURL_INCLUDE_DIRS})
+if(NUMA_INCLUDE_DIR)
+    include_directories(${NUMA_INCLUDE_DIR})
 endif()
 
 # Common library with shared code
@@ -54,12 +74,20 @@ add_library(hft_common STATIC
     src/common/static_config.cpp
     src/common/high_res_timer.cpp
     src/common/metrics_collector.cpp
+    src/common/hft_metrics.cpp
+    src/common/metrics_publisher.cpp
+    src/common/metrics_aggregator.cpp
     src/common/order_book.cpp
     src/common/simple_transport_demo.cpp
+    src/common/cpu_affinity.cpp
 )
 
 target_include_directories(hft_common PUBLIC src)
 target_link_libraries(hft_common ${ZMQ_LIBRARY} pthread)
+if(NUMA_LIBRARY)
+    target_link_libraries(hft_common ${NUMA_LIBRARY})
+    target_compile_definitions(hft_common PRIVATE HAS_NUMA=1)
+endif()
 
 # Create alias for common library to match backtesting CMakeLists
 add_library(common_lib ALIAS hft_common)
@@ -77,8 +105,18 @@ set(SERVICES
 
 # Create executables for each service
 foreach(SERVICE ${SERVICES})
-    add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp)
+    if(SERVICE STREQUAL "order_gateway")
+        add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp src/${SERVICE}/alpaca_client.cpp)
+    else()
+        add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp)
+    endif()
     target_link_libraries(${SERVICE} hft_common ${ZMQ_LIBRARY} pthread)
+    
+    # Add jsoncpp and libcurl support for order_gateway
+    if(SERVICE STREQUAL "order_gateway")
+        target_link_libraries(${SERVICE} ${JSONCPP_LIBRARIES} ${LIBCURL_LIBRARIES})
+        target_compile_options(${SERVICE} PRIVATE ${JSONCPP_CFLAGS_OTHER} ${LIBCURL_CFLAGS_OTHER})
+    endif()
     
     # Add io_uring support for logger
     if(SERVICE STREQUAL "low_latency_logger" AND URING_LIBRARY)

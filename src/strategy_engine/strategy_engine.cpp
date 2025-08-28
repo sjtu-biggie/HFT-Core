@@ -1,7 +1,10 @@
 #include "strategy_engine.h"
+
 #include "../common/static_config.h"
 #include "../common/metrics_collector.h"
-#include "../common/high_res_timer.h"
+#include "../common/metrics_publisher.h"
+#include "../common/hft_metrics.h"
+
 #include <chrono>
 #include <iostream>
 
@@ -32,7 +35,6 @@ void MomentumStrategy::on_market_data(const MarketData& data) {
                              now - time_it->second).count() >= StaticConfig::get_min_signal_interval_ms());
         
         if (can_signal && std::abs(price_change) > StaticConfig::get_momentum_threshold()) {
-            HFT_METRICS_TIMER(metrics::SIGNAL_GENERATION);
             
             // Generate momentum signal
             SignalAction action = (price_change > 0) ? SignalAction::BUY : SignalAction::SELL;
@@ -69,7 +71,8 @@ StrategyEngine::StrategyEngine()
     : running_(false)
     , market_data_processed_(0)
     , signals_generated_(0)
-    , logger_("StrategyEngine", StaticConfig::get_logger_endpoint()) {
+    , logger_("StrategyEngine", StaticConfig::get_logger_endpoint())
+    , metrics_publisher_("StrategyEngine", "tcp://*:5561") {
 }
 
 StrategyEngine::~StrategyEngine() {
@@ -80,9 +83,14 @@ bool StrategyEngine::initialize() {
     logger_.info("Initializing Strategy Engine");
     
     // Initialize high-performance systems
-    HighResTimer::initialize();
     MetricsCollector::instance().initialize();
     StaticConfig::load_from_file("config/hft_config.conf");
+    
+    // Initialize metrics publisher
+    if (!metrics_publisher_.initialize()) {
+        logger_.error("Failed to initialize metrics publisher");
+        return false;
+    }
     
     config_ = std::make_unique<Config>();
     
@@ -145,6 +153,9 @@ void StrategyEngine::start() {
     logger_.info("Starting Strategy Engine with " + std::to_string(strategies_.size()) + " strategies");
     running_.store(true);
     
+    // Start metrics publisher
+    metrics_publisher_.start();
+    
     // Start processing thread
     processing_thread_ = std::make_unique<std::thread>(&StrategyEngine::process_messages, this);
     
@@ -158,6 +169,9 @@ void StrategyEngine::stop() {
     
     logger_.info("Stopping Strategy Engine");
     running_.store(false);
+    
+    // Stop metrics publisher
+    metrics_publisher_.stop();
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();
@@ -250,15 +264,14 @@ void StrategyEngine::process_messages() {
 }
 
 void StrategyEngine::handle_market_data(const MarketData& data) {
-    HFT_METRICS_TIMER(metrics::STRATEGY_PROCESS);
-    
+    HFT_METRICS_TIMER(hft::metrics::STRATEGY_PROCESS_LATENCY);
     // Forward to all strategies
     for (auto& strategy : strategies_) {
         strategy->on_market_data(data);
     }
     
     market_data_processed_++;
-    HFT_METRICS_COUNTER(metrics::MARKET_DATA_MESSAGES);
+    HFT_METRICS_COUNTER(hft::metrics::MARKET_DATA_MESSAGES);
 }
 
 void StrategyEngine::handle_execution(const OrderExecution& execution) {
@@ -269,7 +282,7 @@ void StrategyEngine::handle_execution(const OrderExecution& execution) {
 }
 
 void StrategyEngine::publish_signal(const TradingSignal& signal) {
-    HFT_METRICS_TIMER(metrics::SIGNAL_PUBLISH);
+    HFT_METRICS_TIMER(hft::metrics::STRATEGY_PUBLISH_LATENCY);
     
     try {
         zmq::message_t message(sizeof(TradingSignal));
@@ -277,7 +290,7 @@ void StrategyEngine::publish_signal(const TradingSignal& signal) {
         
         signal_pub_->send(message, zmq::send_flags::dontwait);
         signals_generated_++;
-        HFT_METRICS_COUNTER(metrics::SIGNALS_GENERATED);
+        HFT_METRICS_COUNTER(hft::metrics::SIGNALS_GENERATED);
         
     } catch (const zmq::error_t& e) {
         if (e.num() != EAGAIN) {

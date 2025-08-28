@@ -1,6 +1,8 @@
 #include "market_data_handler.h"
 #include "../common/logging.h"
 #include "../common/static_config.h"
+#include "../common/cpu_affinity.h"
+#include "../common/hft_metrics.h"
 #include <iostream>
 #include <signal.h>
 #include <thread>
@@ -27,6 +29,15 @@ int main(int argc, char* argv[]) {
     
     // Initialize logging
     GlobalLogger::instance().init("MarketDataHandler", StaticConfig::get_logger_endpoint());
+    
+    // Initialize high-performance environment
+    initialize_high_performance_trading();
+    
+    // Initialize HFT metrics system (includes HighResTimer initialization)
+    initialize_hft_metrics();
+    
+    // Set CPU affinity for market data processing (CPU 0)
+    set_thread_for_market_data();
     
     // Set up signal handling for clean shutdown
     signal(SIGINT, signal_handler);
@@ -55,8 +66,11 @@ int main(int argc, char* argv[]) {
         
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
+        shutdown_hft_metrics();
         return 1;
     }
     
+    // Clean shutdown
+    shutdown_hft_metrics();
     return 0;
 }

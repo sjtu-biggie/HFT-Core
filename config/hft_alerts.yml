@@ -1,0 +1,138 @@
+# HFT System Alert Rules
+# Critical alerts for high-frequency trading systems
+
+groups:
+  - name: hft_critical_latency
+    interval: 1s  # Check every second for latency issues
+    rules:
+      - alert: HFT_HighLatency_P99
+        expr: hft_e2e_tick_to_order_ns_p99_ns > 1000000  # > 1ms
+        for: 5s
+        labels:
+          severity: critical
+          component: trading_latency
+        annotations:
+          summary: "HFT: Critical latency threshold exceeded"
+          description: "P99 tick-to-order latency is {{ $value }}ns (>1ms) for 5+ seconds"
+
+      - alert: HFT_HighLatency_P95
+        expr: hft_e2e_tick_to_order_ns_p95_ns > 500000   # > 500μs
+        for: 10s
+        labels:
+          severity: warning
+          component: trading_latency
+        annotations:
+          summary: "HFT: Elevated latency detected"
+          description: "P95 tick-to-order latency is {{ $value }}ns (>500μs)"
+
+  - name: hft_system_health
+    interval: 5s
+    rules:
+      - alert: HFT_ComponentDown
+        expr: hft_component_status == 0
+        for: 2s
+        labels:
+          severity: critical
+          component: system_health
+        annotations:
+          summary: "HFT: Critical component offline"
+          description: "Component {{ $labels.component }} is down"
+
+      - alert: HFT_HighCPU
+        expr: hft_system_cpu_usage_percent > 90
+        for: 30s
+        labels:
+          severity: warning
+          component: system_health
+        annotations:
+          summary: "HFT: High CPU usage detected"
+          description: "CPU usage is {{ $value }}% for 30+ seconds"
+
+      - alert: HFT_HighMemory
+        expr: hft_system_memory_rss_mb > 1024  # > 1GB
+        for: 60s
+        labels:
+          severity: warning
+          component: system_health
+        annotations:
+          summary: "HFT: High memory usage"
+          description: "Memory usage is {{ $value }}MB for 60+ seconds"
+
+  - name: hft_trading_performance
+    interval: 2s
+    rules:
+      - alert: HFT_LowFillRate
+        expr: hft_trading_fill_rate_percent < 90
+        for: 30s
+        labels:
+          severity: warning
+          component: trading_performance
+        annotations:
+          summary: "HFT: Low order fill rate"
+          description: "Fill rate is {{ $value }}% (expected >90%)"
+
+      - alert: HFT_HighSlippage
+        expr: hft_trading_slippage_bps > 5  # > 5 basis points
+        for: 10s
+        labels:
+          severity: warning
+          component: trading_performance
+        annotations:
+          summary: "HFT: High slippage detected"
+          description: "Average slippage is {{ $value }} bps"
+
+      - alert: HFT_LargeLoss
+        expr: hft_trading_pnl_total_usd < -10000  # > $10k loss
+        for: 0s  # Immediate alert
+        labels:
+          severity: critical
+          component: risk_management
+        annotations:
+          summary: "HFT: Large trading loss detected"
+          description: "Total P&L is {{ $value }} USD"
+
+  - name: hft_data_quality
+    interval: 2s
+    rules:
+      - alert: HFT_MarketDataGap
+        expr: increase(hft_data_md_gaps_total[10s]) > 0
+        for: 0s
+        labels:
+          severity: warning
+          component: data_quality
+        annotations:
+          summary: "HFT: Market data gaps detected"
+          description: "{{ $value }} market data gaps in last 10 seconds"
+
+      - alert: HFT_LowThroughput
+        expr: hft_md_messages_per_second < 100  # < 100 msg/sec
+        for: 15s
+        labels:
+          severity: warning
+          component: data_quality
+        annotations:
+          summary: "HFT: Low market data throughput"
+          description: "Market data rate is {{ $value }} msg/sec (expected >100)"
+
+  - name: hft_network_issues
+    interval: 5s
+    rules:
+      - alert: HFT_NetworkErrors
+        expr: increase(hft_network_errors_total[30s]) > 10
+        for: 0s
+        labels:
+          severity: warning
+          component: network
+        annotations:
+          summary: "HFT: Network errors detected"
+          description: "{{ $value }} network errors in last 30 seconds"
+
+      - alert: HFT_PacketLoss
+        expr: increase(hft_network_drops_total[30s]) > 5
+        for: 0s
+        labels:
+          severity: warning
+          component: network
+        annotations:
+          summary: "HFT: Packet loss detected"
+          description: "{{ $value }} packets dropped in last 30 seconds"

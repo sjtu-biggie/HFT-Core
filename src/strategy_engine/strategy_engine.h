@@ -2,6 +2,7 @@
 
 #include "../common/message_types.h"
 #include "../common/logging.h"
+#include "../common/metrics_publisher.h"
 #include "../common/config.h"
 #include <zmq.hpp>
 #include <memory>
@@ -57,10 +58,6 @@ private:
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_signal_time_;
     
     Logger logger_;
-    
-    // Strategy parameters (now using StaticConfig)
-    // static constexpr double MOMENTUM_THRESHOLD = 0.001;  // 0.1% price change (lowered for testing)
-    // static constexpr int MIN_SIGNAL_INTERVAL_MS = 1000;  // Minimum time between signals
 };
 
 class StrategyEngine {
@@ -118,6 +115,7 @@ private:
     void log_statistics();
     
     Logger logger_;
+    MetricsPublisher metrics_publisher_;
 };
 
 } // namespace hft

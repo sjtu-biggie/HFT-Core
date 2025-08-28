@@ -1,0 +1,114 @@
+# HFT System Prometheus Configuration for Grafana Cloud
+# High-frequency trading requires sub-second monitoring for critical metrics
+
+global:
+  scrape_interval: 5s     # fast scrape for HFT systems
+  evaluation_interval: 5s # rule evaluation
+  scrape_timeout: 5s   # Short timeout for responsiveness
+  external_labels:
+    cluster: 'hft-trading-system'
+    environment: 'dev'
+    
+rule_files:
+  - "hft_alerts.yml"
+
+# Remote write to Grafana Cloud (replace with your actual values)
+remote_write:
+  - url: "https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push"
+    basic_auth:
+      username: "2643631"
+      password: "glc_eyJvIjoiMTUxOTg5MCIsIm4iOiJzdGFjay0xMzU5Njk4LWFsbG95LWdlbnlhbmciLCJrIjoiOGo5bThESTFzTzdrYTQ3RjVqMm00ZWt3IiwibSI6eyJyIjoicHJvZC11cy1lYXN0LTAifX0="
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 10
+      capacity: 10000
+      batch_send_deadline: 5s
+    # Only send critical HFT metrics to cloud to reduce costs
+    # write_relabel_configs:
+    #   - source_labels: [__name__]
+    #     regex: 'hft_(e2e_tick_to_order_ns|trading_pnl_total_usd|component_status|trading_positions_open|orders_per_second).*'
+    #     action: keep
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # HFT Aggregated Metrics - All services combined
+  - job_name: 'hft-all-services'
+    scrape_interval: 5s
+    scrape_timeout: 2s
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'localhost:8080'  # WebSocket Bridge (Aggregated endpoint)
+        labels:
+          service: 'aggregated'
+          tier: 'infrastructure'
+          
+  # Market Data Handler - Service-specific metrics
+  - job_name: 'hft-market-data'
+    scrape_interval: 5s
+    scrape_timeout: 2s
+    metrics_path: /metrics/market_data
+    static_configs:
+      - targets:
+          - 'localhost:8080'  # Service-specific endpoint
+        labels:
+          service: 'market_data_handler'
+          tier: 'core'
+          component: 'data_ingestion'
+
+  # Strategy Engine - Service-specific metrics
+  - job_name: 'hft-strategy-engine'
+    scrape_interval: 5s
+    scrape_timeout: 2s
+    metrics_path: /metrics/strategy_engine
+    static_configs:
+      - targets:
+          - 'localhost:8080'
+        labels:
+          service: 'strategy_engine'
+          tier: 'core'
+          component: 'trading_logic'
+
+  # Order Gateway - Service-specific metrics
+  - job_name: 'hft-order-gateway'
+    scrape_interval: 5s
+    scrape_timeout: 2s
+    metrics_path: /metrics/order_gateway
+    static_configs:
+      - targets:
+          - 'localhost:8080'
+        labels:
+          service: 'order_gateway'
+          tier: 'core'
+          component: 'execution'
+
+  # Position & Risk Service - Service-specific metrics
+  - job_name: 'hft-position-risk'
+    scrape_interval: 5s
+    scrape_timeout: 2s
+    metrics_path: /metrics/position_service
+    static_configs:
+      - targets:
+          - 'localhost:8080'
+        labels:
+          service: 'position_risk_service'
+          tier: 'core'
+          component: 'risk_management'
+
+  # # Control API - System control metrics (separate port)
+  # - job_name: 'hft-control-api'
+  #   scrape_interval: 5s
+  #   scrape_timeout: 2s
+  #   metrics_path: /metrics
+  #   static_configs:
+  #     - targets:
+  #         - 'localhost:8081'  # Control API runs on different port
+  #       labels:
+  #         service: 'control_api'
+  #         tier: 'infrastructure'
+  #         component: 'system_control'

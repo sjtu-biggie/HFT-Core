@@ -36,11 +36,13 @@ public:
     
     // Convert ticks to nanoseconds using calibrated frequency
     static inline uint64_t ticks_to_nanoseconds(ticks_t ticks) {
+
         return (ticks * 1000000000ULL) / tsc_frequency_;
     }
     
     // Convert nanoseconds to ticks
     static inline ticks_t nanoseconds_to_ticks(uint64_t nanoseconds) {
+
         return (nanoseconds * tsc_frequency_) / 1000000000ULL;
     }
     

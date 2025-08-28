@@ -1,12 +1,17 @@
 #include "position_risk_service.h"
 #include "../common/static_config.h"
+#include "../common/metrics_collector.h"
+#include "../common/metrics_publisher.h"
+#include "../common/hft_metrics.h"
 #include <iostream>
 
 namespace hft {
 
 PositionRiskService::PositionRiskService()
     : running_(false), max_position_value_(100000.0), max_daily_loss_(5000.0)
-    , current_daily_pnl_(0.0), logger_("PositionRiskService", StaticConfig::get_logger_endpoint()) {
+    , current_daily_pnl_(0.0), positions_updated_(0), risk_checks_(0), risk_violations_(0)
+    , logger_("PositionRiskService", StaticConfig::get_logger_endpoint())
+    , metrics_publisher_("PositionRiskService", "tcp://*:5564") {
 }
 
 PositionRiskService::~PositionRiskService() {
@@ -15,6 +20,15 @@ PositionRiskService::~PositionRiskService() {
 
 bool PositionRiskService::initialize() {
     logger_.info("Initializing Position & Risk Service");
+    
+    MetricsCollector::instance().initialize();
+    StaticConfig::load_from_file("config/hft_config.conf");
+
+    // Initialize metrics publisher
+    if (!metrics_publisher_.initialize()) {
+        logger_.error("Failed to initialize metrics publisher");
+        return false;
+    }
     
     config_ = std::make_unique<Config>();
     
@@ -53,6 +67,10 @@ void PositionRiskService::start() {
     
     logger_.info("Starting Position & Risk Service");
     running_.store(true);
+    
+    // Start metrics publisher
+    metrics_publisher_.start();
+    
     processing_thread_ = std::make_unique<std::thread>(&PositionRiskService::process_messages, this);
     logger_.info("Service started");
 }
@@ -62,6 +80,9 @@ void PositionRiskService::stop() {
     
     logger_.info("Stopping service");
     running_.store(false);
+    
+    // Stop metrics publisher
+    metrics_publisher_.stop();
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();
@@ -124,6 +145,8 @@ void PositionRiskService::process_messages() {
 }
 
 void PositionRiskService::handle_execution(const OrderExecution& execution) {
+    HFT_RDTSC_TIMER(hft::metrics::TOTAL_LATENCY);
+    
     std::string symbol(execution.symbol);
     auto& position = positions_[symbol];
     
@@ -144,6 +167,9 @@ void PositionRiskService::handle_execution(const OrderExecution& execution) {
             position.average_price = total_cost / position.quantity;
         }
     }
+    
+    positions_updated_++;
+    HFT_COMPONENT_COUNTER(hft::metrics::POSITIONS_UPDATED_TOTAL);
     
     publish_position_update(symbol);
     logger_.info("Position updated: " + symbol + " qty=" + std::to_string(position.quantity));
@@ -192,18 +218,68 @@ void PositionRiskService::publish_position_update(const std::string& symbol) {
 }
 
 bool PositionRiskService::check_risk_limits(const TradingSignal& signal) {
-    // Implement risk checks here
-    return true; // Simplified for now
+    HFT_RDTSC_TIMER(hft::metrics::RISK_CHECK_LATENCY);
+    
+    risk_checks_++;
+    HFT_COMPONENT_COUNTER(hft::metrics::RISK_CHECKS_TOTAL);
+    
+    // Check position size limits
+    std::string symbol(signal.symbol);
+    if (positions_.count(symbol)) {
+        const auto& position = positions_[symbol];
+        double proposed_value = std::abs(position.quantity + static_cast<int32_t>(signal.quantity)) * signal.price;
+        
+        if (proposed_value > max_position_value_) {
+            risk_violations_++;
+            HFT_COMPONENT_COUNTER(hft::metrics::RISK_VIOLATIONS_TOTAL);
+            return false;
+        }
+    }
+    
+    // Check daily P&L limits
+    if (current_daily_pnl_ < -max_daily_loss_) {
+        risk_violations_++;
+        HFT_COMPONENT_COUNTER(hft::metrics::RISK_VIOLATIONS_TOTAL);
+        return false;
+    }
+    
+    return true;
 }
 
 void PositionRiskService::log_statistics() {
     double total_unrealized = 0.0;
+    double total_realized = 0.0;
+    double gross_exposure = 0.0;
+    double net_exposure = 0.0;
+    
     for (const auto& [symbol, position] : positions_) {
         total_unrealized += position.unrealized_pnl;
+        total_realized += position.realized_pnl;
+        
+        // Calculate exposure (using current prices if available)
+        double market_value = 0.0;
+        if (current_prices_.count(symbol)) {
+            market_value = position.quantity * current_prices_[symbol];
+        } else {
+            market_value = position.quantity * position.average_price;
+        }
+        
+        gross_exposure += std::abs(market_value);
+        net_exposure += market_value;
     }
     
+    // Update metrics
+    HFT_GAUGE_VALUE(hft::metrics::POSITIONS_OPEN_COUNT, positions_.size());
+    HFT_GAUGE_VALUE(hft::metrics::PNL_UNREALIZED_USD, static_cast<uint64_t>(total_unrealized));
+    HFT_GAUGE_VALUE(hft::metrics::PNL_REALIZED_USD, static_cast<uint64_t>(total_realized));
+    HFT_GAUGE_VALUE(hft::metrics::PNL_TOTAL_USD, static_cast<uint64_t>(total_unrealized + total_realized));
+    HFT_GAUGE_VALUE(hft::metrics::GROSS_EXPOSURE_USD, static_cast<uint64_t>(gross_exposure));
+    HFT_GAUGE_VALUE(hft::metrics::NET_EXPOSURE_USD, static_cast<uint64_t>(net_exposure));
+    
     logger_.info("Positions: " + std::to_string(positions_.size()) + 
-                ", Total Unrealized P&L: " + std::to_string(total_unrealized));
+                ", Total Unrealized P&L: " + std::to_string(total_unrealized) +
+                ", Risk Checks: " + std::to_string(risk_checks_.load()) +
+                ", Risk Violations: " + std::to_string(risk_violations_.load()));
 }
 
 } // namespace hft

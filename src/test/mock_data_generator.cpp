@@ -1,6 +1,6 @@
 #include "../common/message_types.h"
 #include "../common/logging.h"
-#include "../common/config.h"
+#include "../common/static_config.h"
 #include <zmq.hpp>
 #include <iostream>
 #include <thread>
@@ -14,7 +14,7 @@ public:
     MockDataGenerator() 
         : running_(false)
         , messages_sent_(0)
-        , logger_("MockDataGenerator") {
+        , logger_("MockDataGenerator", StaticConfig::get_logger_endpoint()) {
     }
     
     bool initialize() {
