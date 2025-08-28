@@ -13,6 +13,7 @@ namespace hft {
 
 MarketDataHandler::MarketDataHandler()
     : running_(false)
+    , paused_(false)
     , messages_processed_(0)
     , bytes_processed_(0)
     , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) 
@@ -37,9 +38,10 @@ bool MarketDataHandler::initialize() {
     }
     
     try {
-        // Initialize ZeroMQ context and publisher
+        // Initialize ZeroMQ context and sockets
         context_ = std::make_unique<zmq::context_t>(1);
         publisher_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PUB);
+        control_subscriber_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
         
         // Set socket options for high performance
         int sndhwm = 1000;  // Send high water mark
@@ -52,7 +54,14 @@ bool MarketDataHandler::initialize() {
         const char* endpoint = StaticConfig::get_market_data_endpoint();
         publisher_->bind(endpoint);
         
-        logger_.info("Bound to endpoint: " + std::string(endpoint));
+        logger_.info("Bound to market data endpoint: " + std::string(endpoint));
+        
+        // Subscribe to control messages
+        control_subscriber_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
+        int rcvhwm = 100;
+        control_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
+        control_subscriber_->connect("tcp://localhost:5561");
+        logger_.info("Connected to control endpoint: tcp://localhost:5561");
         
         // Initialize DPDK if enabled
         if (StaticConfig::get_enable_dpdk()) {
@@ -84,8 +93,9 @@ void MarketDataHandler::start() {
     // Start metrics publisher
     metrics_publisher_.start();
     
-    // Start processing thread
+    // Start processing threads
     processing_thread_ = std::make_unique<std::thread>(&MarketDataHandler::process_market_data, this);
+    control_thread_ = std::make_unique<std::thread>(&MarketDataHandler::process_control_messages, this);
     
     logger_.info("Market Data Handler started");
 }
@@ -105,9 +115,16 @@ void MarketDataHandler::stop() {
         processing_thread_->join();
     }
     
-    // Close ZeroMQ socket
+    if (control_thread_ && control_thread_->joinable()) {
+        control_thread_->join();
+    }
+    
+    // Close ZeroMQ sockets
     if (publisher_) {
         publisher_->close();
+    }
+    if (control_subscriber_) {
+        control_subscriber_->close();
     }
     
     log_statistics();
@@ -125,6 +142,12 @@ void MarketDataHandler::process_market_data() {
     const auto stats_interval = std::chrono::seconds(10);
     
     while (running_.load()) {
+        // Check if paused
+        if (paused_.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+        
         if (StaticConfig::get_enable_dpdk()) {
             // Process DPDK packets if available
             process_dpdk_packets();
@@ -147,6 +170,63 @@ void MarketDataHandler::process_market_data() {
     }
     
     logger_.info("Market data processing thread stopped");
+}
+
+void MarketDataHandler::process_control_messages() {
+    logger_.info("Control message processing thread started");
+    
+    while (running_.load()) {
+        try {
+            zmq::message_t message;
+            if (control_subscriber_->recv(message, zmq::recv_flags::dontwait)) {
+                if (message.size() == sizeof(ControlCommand)) {
+                    ControlCommand command;
+                    std::memcpy(&command, message.data(), sizeof(ControlCommand));
+                    
+                    // Check if this command is for us
+                    std::string target(command.target_service);
+                    if (target == "MarketDataHandler" || target == "all") {
+                        handle_control_command(command);
+                    }
+                }
+            }
+            
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            
+        } catch (const std::exception& e) {
+            logger_.error("Control message processing error: " + std::string(e.what()));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    
+    logger_.info("Control message processing thread stopped");
+}
+
+void MarketDataHandler::handle_control_command(const ControlCommand& command) {
+    switch (command.action) {
+        case ControlAction::START_TRADING:
+            if (paused_.load()) {
+                paused_.store(false);
+                logger_.info("Market data processing resumed via control command");
+            } else {
+                logger_.info("Market data processing already running");
+            }
+            break;
+            
+        case ControlAction::STOP_TRADING:
+        case ControlAction::PAUSE_TRADING:
+            if (!paused_.load()) {
+                paused_.store(true);
+                logger_.info("Market data processing paused via control command");
+            } else {
+                logger_.info("Market data processing already paused");
+            }
+            break;
+            
+        default:
+            logger_.warning("Unsupported control action: " + std::to_string(static_cast<int>(command.action)));
+            break;
+    }
 }
 
 bool MarketDataHandler::initialize_dpdk() {

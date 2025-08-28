@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sstream>
+#include <iomanip>
 #include <map>
 #include <queue>
 #include <future>
@@ -33,13 +34,23 @@ public:
         , logger_("WebSocketBridge", StaticConfig::get_logger_endpoint())
         , context_(1)
         , zmq_subscriber_(context_, ZMQ_SUB)
+        , execution_subscriber_(context_, ZMQ_SUB)
+        , control_publisher_(context_, ZMQ_PUB)
         , server_socket_(-1)
         , port_(8080)
         , metrics_aggregator_("tcp://localhost:5560") {
         
-        // Subscribe to all messages
+        // Subscribe to all market data messages
         zmq_subscriber_.setsockopt(ZMQ_SUBSCRIBE, "", 0);
         zmq_subscriber_.setsockopt(ZMQ_RCVTIMEO, 1000); // 1 second timeout
+        
+        // Subscribe to all execution messages
+        execution_subscriber_.setsockopt(ZMQ_SUBSCRIBE, "", 0);
+        execution_subscriber_.setsockopt(ZMQ_RCVTIMEO, 1000); // 1 second timeout
+        
+        // Control publisher setup
+        int linger = 0;
+        control_publisher_.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
     }
     
     ~WebSocketBridge() {
@@ -57,7 +68,16 @@ public:
             // Connect to ZMQ message bus
             std::string zmq_endpoint = StaticConfig::get_market_data_endpoint();
             zmq_subscriber_.connect(zmq_endpoint);
-            logger_.info("Connected to ZMQ endpoint: " + zmq_endpoint);
+            logger_.info("Connected to market data endpoint: " + zmq_endpoint);
+            
+            // Connect to executions endpoint
+            std::string exec_endpoint = StaticConfig::get_executions_endpoint();
+            execution_subscriber_.connect(exec_endpoint);
+            logger_.info("Connected to executions endpoint: " + exec_endpoint);
+            
+            // Bind control publisher - using port 5561 for control commands
+            control_publisher_.bind("tcp://*:5561");
+            logger_.info("Control publisher bound to tcp://*:5561");
             
             // Create HTTP server socket
             server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
@@ -141,6 +161,9 @@ public:
         // Start ZMQ message processing thread
         zmq_thread_ = std::make_unique<std::thread>(&WebSocketBridge::zmq_message_loop, this);
         
+        // Start execution processing thread
+        execution_thread_ = std::make_unique<std::thread>(&WebSocketBridge::execution_message_loop, this);
+        
         // Start HTTP server thread
         server_thread_ = std::make_unique<std::thread>(&WebSocketBridge::server_loop, this);
         
@@ -163,6 +186,10 @@ public:
         
         if (zmq_thread_ && zmq_thread_->joinable()) {
             zmq_thread_->join();
+        }
+        
+        if (execution_thread_ && execution_thread_->joinable()) {
+            execution_thread_->join();
         }
         
         if (server_thread_ && server_thread_->joinable()) {
@@ -189,17 +216,23 @@ private:
     Logger logger_;
     zmq::context_t context_;
     zmq::socket_t zmq_subscriber_;
+    zmq::socket_t execution_subscriber_;
+    zmq::socket_t control_publisher_;
     int server_socket_;
     int port_;
     MetricsAggregator metrics_aggregator_;
     
     std::unique_ptr<std::thread> zmq_thread_;
+    std::unique_ptr<std::thread> execution_thread_;
     std::unique_ptr<std::thread> server_thread_;
     
-    // Thread-safe message buffer
+    // Thread-safe message buffers
     std::mutex message_mutex_;
     std::vector<std::string> message_buffer_;
+    std::mutex execution_mutex_;
+    std::vector<std::string> execution_buffer_;
     static const size_t MAX_MESSAGES = 1000;
+    static const size_t MAX_EXECUTIONS = 500;
     
     // Thread pool for client handling
     static constexpr size_t MAX_WORKER_THREADS = 2;
@@ -245,6 +278,46 @@ private:
         }
         
         logger_.info("ZMQ message processing thread stopped");
+    }
+    
+    void execution_message_loop() {
+        logger_.info("Execution message processing thread started");
+        
+        while (running_) {
+            try {
+                zmq::message_t msg;
+                auto result = execution_subscriber_.recv(msg, zmq::recv_flags::dontwait);
+                
+                if (result) {
+                    if (msg.size() == sizeof(OrderExecution)) {
+                        OrderExecution execution;
+                        std::memcpy(&execution, msg.data(), sizeof(OrderExecution));
+                        
+                        // Format as JSON for web clients
+                        std::string json_exec = format_execution_as_json(execution);
+                        
+                        // Add to execution buffer (thread-safe)
+                        {
+                            std::lock_guard<std::mutex> lock(execution_mutex_);
+                            execution_buffer_.push_back(json_exec);
+                            
+                            // Keep buffer size manageable
+                            if (execution_buffer_.size() > MAX_EXECUTIONS) {
+                                execution_buffer_.erase(execution_buffer_.begin());
+                            }
+                        }
+                    }
+                }
+                
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+                
+            } catch (const std::exception& e) {
+                logger_.error("Execution message processing error: " + std::string(e.what()));
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+        
+        logger_.info("Execution message processing thread stopped");
     }
     
     void server_loop() {
@@ -322,15 +395,23 @@ private:
         if (bytes_read > 0) {
             std::string request(buffer, bytes_read);
             
-            // Parse request path
-            std::string path = parse_request_path(request);
+            // Parse request method and path
+            std::string method, path;
+            parse_request(request, method, path);
             
             // Debug logging
             logger_.info("Received HTTP request for path: " + path);
             
             std::string response;
             try {
-                if (path == "/metrics") {
+                // Handle POST requests for control API
+                if (method == "POST" && path == "/api/control/start") {
+                    logger_.info("Received start control command");
+                    response = handle_control_command(ControlAction::START_TRADING);
+                } else if (method == "POST" && path == "/api/control/stop") {
+                    logger_.info("Received stop control command");
+                    response = handle_control_command(ControlAction::STOP_TRADING);
+                } else if (path == "/metrics") {
                     // Prometheus metrics endpoint - all services
                     logger_.info("Building aggregated metrics response");
                     response = build_metrics_response();
@@ -351,6 +432,10 @@ private:
                     // Position & Risk Service specific metrics
                     logger_.info("Building position service metrics response");
                     response = build_service_metrics_response("PositionRiskService");
+                } else if (path == "/api/executions") {
+                    // Recent executions endpoint
+                    logger_.info("Building executions response");
+                    response = build_executions_response();
                 } else {
                     // Default: return current messages
                     logger_.info("Building default HTTP response");
@@ -397,11 +482,10 @@ private:
         }
     }
     
-    std::string parse_request_path(const std::string& request) {
+    void parse_request(const std::string& request, std::string& method, std::string& path) {
         std::istringstream stream(request);
-        std::string method, path, version;
+        std::string version;
         stream >> method >> path >> version;
-        return path;
     }
     
     std::string build_metrics_response() {
@@ -529,6 +613,121 @@ private:
         
         json << "\",\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count() << "}";
+        
+        return json.str();
+    }
+    
+    std::string build_executions_response() {
+        // Get current executions
+        std::vector<std::string> executions;
+        {
+            std::lock_guard<std::mutex> lock(execution_mutex_);
+            executions = execution_buffer_;
+        }
+        
+        // Build JSON response
+        std::ostringstream json;
+        json << "{\"executions\":[";
+        
+        for (size_t i = 0; i < executions.size(); ++i) {
+            if (i > 0) json << ",";
+            json << executions[i];
+        }
+        
+        json << "],\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count() << "}";
+        
+        std::string body = json.str();
+        
+        // Build HTTP response
+        std::ostringstream response;
+        response << "HTTP/1.1 200 OK\\r\\n";
+        response << "Content-Type: application/json\\r\\n";
+        response << "Access-Control-Allow-Origin: *\\r\\n";
+        response << "Content-Length: " << body.length() << "\\r\\n";
+        response << "\\r\\n";
+        response << body;
+        
+        return response.str();
+    }
+    
+    std::string handle_control_command(ControlAction action) {
+        try {
+            // Create control command message
+            ControlCommand command{};
+            command.header = MessageFactory::create_header(MessageType::CONTROL_COMMAND, 
+                                                         sizeof(ControlCommand) - sizeof(MessageHeader));
+            command.action = action;
+            std::strncpy(command.target_service, "MarketDataHandler", sizeof(command.target_service) - 1);
+            std::strncpy(command.parameters, "{}", sizeof(command.parameters) - 1);
+            
+            // Publish control command
+            zmq::message_t message(sizeof(ControlCommand));
+            std::memcpy(message.data(), &command, sizeof(ControlCommand));
+            control_publisher_.send(message, zmq::send_flags::dontwait);
+            
+            logger_.info("Control command sent: " + std::to_string(static_cast<int>(action)));
+            
+            // Build success response
+            std::string body = "{\"success\":true,\"message\":\"Command executed\"}";
+            
+            std::ostringstream response;
+            response << "HTTP/1.1 200 OK\\r\\n";
+            response << "Content-Type: application/json\\r\\n";
+            response << "Access-Control-Allow-Origin: *\\r\\n";
+            response << "Content-Length: " << body.length() << "\\r\\n";
+            response << "\\r\\n";
+            response << body;
+            
+            return response.str();
+            
+        } catch (const std::exception& e) {
+            logger_.error("Control command failed: " + std::string(e.what()));
+            
+            std::string body = "{\"success\":false,\"message\":\"" + std::string(e.what()) + "\"}";
+            
+            std::ostringstream response;
+            response << "HTTP/1.1 500 Internal Server Error\\r\\n";
+            response << "Content-Type: application/json\\r\\n";
+            response << "Access-Control-Allow-Origin: *\\r\\n";
+            response << "Content-Length: " << body.length() << "\\r\\n";
+            response << "\\r\\n";
+            response << body;
+            
+            return response.str();
+        }
+    }
+    
+    std::string format_execution_as_json(const OrderExecution& execution) {
+        // Convert execution types to strings
+        std::string exec_type_str;
+        switch (execution.exec_type) {
+            case ExecutionType::NEW: exec_type_str = "NEW"; break;
+            case ExecutionType::PARTIAL_FILL: exec_type_str = "PARTIAL"; break;
+            case ExecutionType::FILL: exec_type_str = "FILL"; break;
+            case ExecutionType::CANCELLED: exec_type_str = "CANCELLED"; break;
+            case ExecutionType::REJECTED: exec_type_str = "REJECTED"; break;
+            default: exec_type_str = "UNKNOWN"; break;
+        }
+        
+        // Get current timestamp for display
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        auto tm = *std::localtime(&time_t);
+        
+        std::ostringstream json;
+        json << "{";
+        json << "\"order_id\":" << execution.order_id << ",";
+        json << "\"symbol\":\"" << std::string(execution.symbol) << "\",";
+        json << "\"type\":\"" << exec_type_str << "\",";
+        json << "\"action\":\"" << (execution.fill_quantity > 0 ? "BUY" : "SELL") << "\",";
+        json << "\"quantity\":" << execution.fill_quantity << ",";
+        json << "\"price\":" << std::fixed << std::setprecision(2) << execution.fill_price << ",";
+        json << "\"commission\":" << std::fixed << std::setprecision(4) << execution.commission << ",";
+        json << "\"timestamp\":\"" << std::setfill('0') << std::setw(2) << tm.tm_hour << ":"
+             << std::setfill('0') << std::setw(2) << tm.tm_min << ":"
+             << std::setfill('0') << std::setw(2) << tm.tm_sec << "\"";
+        json << "}";
         
         return json.str();
     }
