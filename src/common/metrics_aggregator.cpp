@@ -94,7 +94,7 @@ void MetricsAggregator::stop() {
 void MetricsAggregator::initialize_default_metrics() {
     std::lock_guard<std::mutex> lock(metrics_mutex_);
     
-    // Initialize all HFT metrics with default values
+    // Initialize all HFT metrics with default values and service labels
     auto init_metric = [this](const char* name, MetricType type, uint64_t default_value = 0) {
         MetricStats stats;
         stats.name = name;
@@ -109,42 +109,44 @@ void MetricsAggregator::initialize_default_metrics() {
         stats.p99 = default_value;
         stats.p999 = default_value;
         stats.mean = default_value;
+        stats.service_name = "system"; // Default service for system-wide metrics
         default_metrics_[name] = stats;
     };
     
-    // Critical Path Latencies
-    init_metric(hft::metrics::MD_TOTAL_LATENCY, MetricType::LATENCY);
-    init_metric(hft::metrics::MD_PARSE_LATENCY, MetricType::LATENCY);
-    init_metric(hft::metrics::MD_PUBLISH_LATENCY, MetricType::LATENCY);
-    init_metric(hft::metrics::STRATEGY_TOTAL_LATENCY, MetricType::LATENCY);
-    init_metric(hft::metrics::STRATEGY_PROCESS_LATENCY, MetricType::LATENCY);
-    init_metric(hft::metrics::ORDER_TOTAL_LATENCY, MetricType::LATENCY);
-    init_metric(hft::metrics::E2E_TICK_TO_SIGNAL, MetricType::LATENCY);
-    init_metric(hft::metrics::E2E_TICK_TO_ORDER, MetricType::LATENCY);
-    init_metric(hft::metrics::E2E_TICK_TO_FILL, MetricType::LATENCY);
+    // Critical Path Latencies with updated metric names (no prefixes)
+    init_metric(hft::metrics::TOTAL_LATENCY, MetricType::LATENCY);
+    init_metric(hft::metrics::PARSE_LATENCY, MetricType::LATENCY);
+    init_metric(hft::metrics::PUBLISH_LATENCY, MetricType::LATENCY);
+    init_metric(hft::metrics::PROCESS_LATENCY, MetricType::LATENCY);
+    init_metric(hft::metrics::VALIDATE_LATENCY, MetricType::LATENCY);
+    init_metric(hft::metrics::RISK_CHECK_LATENCY, MetricType::LATENCY);
+    init_metric(hft::metrics::SUBMIT_LATENCY, MetricType::LATENCY);
+    init_metric(hft::metrics::TICK_TO_SIGNAL, MetricType::LATENCY);
+    init_metric(hft::metrics::TICK_TO_ORDER, MetricType::LATENCY);
+    init_metric(hft::metrics::TICK_TO_FILL, MetricType::LATENCY);
     
-    // Throughput Metrics
-    init_metric(hft::metrics::MD_MESSAGES_PROCESSED, MetricType::COUNTER);
-    init_metric(hft::metrics::MD_MESSAGES_PER_SEC, MetricType::GAUGE);
-    init_metric(hft::metrics::STRATEGY_SIGNALS_GENERATED, MetricType::COUNTER);
-    init_metric(hft::metrics::STRATEGY_DECISIONS_PER_SEC, MetricType::GAUGE);
-    init_metric(hft::metrics::ORDERS_SUBMITTED, MetricType::COUNTER);
-    init_metric(hft::metrics::ORDERS_FILLED, MetricType::COUNTER);
-    init_metric(hft::metrics::ORDERS_PER_SEC, MetricType::GAUGE);
+    // Throughput Metrics with updated metric names (no prefixes)
+    init_metric(hft::metrics::MESSAGES_PROCESSED, MetricType::COUNTER);
+    init_metric(hft::metrics::MESSAGES_PER_SECOND, MetricType::GAUGE);
+    init_metric(hft::metrics::SIGNALS_GENERATED, MetricType::COUNTER);
+    init_metric(hft::metrics::DECISIONS_PER_SECOND, MetricType::GAUGE);
+    init_metric(hft::metrics::ORDERS_SUBMITTED_TOTAL, MetricType::COUNTER);
+    init_metric(hft::metrics::ORDERS_FILLED_TOTAL, MetricType::COUNTER);
+    init_metric(hft::metrics::ORDERS_PER_SECOND, MetricType::GAUGE);
     
-    // Trading Performance
-    init_metric(hft::metrics::POSITIONS_OPEN, MetricType::GAUGE);
-    init_metric(hft::metrics::PNL_TOTAL, MetricType::GAUGE);
-    init_metric(hft::metrics::FILL_RATE, MetricType::GAUGE, 100); // Default 100%
+    // Trading Performance with updated metric names (no prefixes)
+    init_metric(hft::metrics::POSITIONS_OPEN_COUNT, MetricType::GAUGE);
+    init_metric(hft::metrics::PNL_TOTAL_USD, MetricType::GAUGE);
+    init_metric(hft::metrics::FILL_RATE_PERCENT, MetricType::GAUGE, 100); // Default 100%
     
-    // System Metrics
-    init_metric(hft::metrics::MEMORY_RSS, MetricType::GAUGE);
-    init_metric(hft::metrics::HFT_CPU_USAGE, MetricType::GAUGE);
-    init_metric(hft::metrics::THREAD_COUNT, MetricType::GAUGE, 1);
+    // System Metrics with updated metric names (no prefixes)
+    init_metric(hft::metrics::MEMORY_RSS_MB, MetricType::GAUGE);
+    init_metric(hft::metrics::CPU_USAGE_PERCENT, MetricType::GAUGE);
+    init_metric(hft::metrics::THREAD_COUNT_CURRENT, MetricType::GAUGE, 1);
     
-    // Network Metrics
-    init_metric(hft::metrics::NETWORK_BYTES_RECV, MetricType::GAUGE);
-    init_metric(hft::metrics::NETWORK_BYTES_SENT, MetricType::GAUGE);
+    // Network Metrics with updated metric names (no prefixes)
+    init_metric(hft::metrics::NETWORK_BYTES_RECV_TOTAL, MetricType::GAUGE);
+    init_metric(hft::metrics::NETWORK_BYTES_SENT_TOTAL, MetricType::GAUGE);
     
     std::cout << "[MetricsAggregator] Initialized " << default_metrics_.size() << " default metrics" << std::endl;
 }
@@ -221,13 +223,14 @@ void MetricsAggregator::process_metrics_message(const std::vector<uint8_t>& data
     service_metrics.is_online = true;
     service_metrics.metrics.clear();
     
-    // Process each metric entry
+    // Process each metric entry with service identification
     for (uint32_t i = 0; i < header->metric_count; ++i) {
         const SerializedMetricEntry& entry = entries[i];
         std::string metric_name(entry.name);
         
         MetricStats stats;
         stats.name = metric_name;
+        stats.service_name = service_name;  // Set the service that produced this metric
         stats.type = static_cast<MetricType>(entry.type);
         stats.count = 1;
         stats.sum = entry.value;
@@ -239,7 +242,10 @@ void MetricsAggregator::process_metrics_message(const std::vector<uint8_t>& data
         stats.p99 = entry.value;
         stats.p999 = entry.value;
         stats.mean = entry.value;
-        service_metrics.metrics[metric_name] = stats;
+        
+        // Use service-prefixed key for unique identification
+        std::string service_metric_key = service_name + "." + metric_name;
+        service_metrics.metrics[service_metric_key] = stats;
     }
     std::cout << "[MetricsAggregator] process_metrics_message() - finished processing metrics from " << service_name << ", releasing mutex..." << std::endl;
 }
@@ -261,10 +267,11 @@ std::unordered_map<std::string, MetricStats> MetricsAggregator::get_all_metrics(
     auto result = default_metrics_;
     
     // Override with actual metrics from online services
+    // Keep service-specific keys to avoid conflicts between services
     for (const auto& [service_name, service_metrics] : service_metrics_) {
         if (service_metrics.is_online) {
-            for (const auto& [metric_name, stats] : service_metrics.metrics) {
-                result[metric_name] = stats;
+            for (const auto& [service_metric_key, stats] : service_metrics.metrics) {
+                result[service_metric_key] = stats;
             }
         }
     }
@@ -287,6 +294,34 @@ std::vector<std::string> MetricsAggregator::get_online_services() const {
     
     std::cout << "[MetricsAggregator] get_online_services() - returning " << online_services.size() << " services, releasing mutex..." << std::endl;
     return online_services;
+}
+
+std::unordered_map<std::string, MetricStats> MetricsAggregator::get_service_metrics(const std::string& service_name) const {
+    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::unordered_map<std::string, MetricStats> result;
+    
+    // Get default metrics for this service
+    for (const auto& [metric_name, stats] : default_metrics_) {
+        MetricStats service_stats = stats;
+        service_stats.service_name = service_name;
+        result[metric_name] = service_stats;
+    }
+    
+    // Override with actual metrics if service is online
+    auto service_it = service_metrics_.find(service_name);
+    if (service_it != service_metrics_.end() && service_it->second.is_online) {
+        for (const auto& [service_metric_key, stats] : service_it->second.metrics) {
+            // Extract metric name from service_metric_key (remove service prefix)
+            std::string metric_name = service_metric_key;
+            size_t dot_pos = metric_name.find('.');
+            if (dot_pos != std::string::npos) {
+                metric_name = metric_name.substr(dot_pos + 1);
+            }
+            result[metric_name] = stats;
+        }
+    }
+    
+    return result;
 }
 
 } // namespace hft

@@ -3,6 +3,7 @@
 #include "../common/message_types.h"
 #include "../common/logging.h"
 #include "../common/static_config.h"
+#include "../common/metrics_publisher.h"
 #include "alpaca_client.h"
 #include <zmq.hpp>
 #include <memory>
@@ -63,6 +64,10 @@ private:
     // Statistics
     std::atomic<uint64_t> orders_processed_;
     std::atomic<uint64_t> orders_filled_;
+    std::atomic<uint64_t> orders_rejected_;
+    
+    // Metrics
+    MetricsPublisher metrics_publisher_;
     
     void process_signals();
     void handle_trading_signal(const TradingSignal& signal);

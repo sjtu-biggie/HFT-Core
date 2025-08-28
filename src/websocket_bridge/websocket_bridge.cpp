@@ -331,10 +331,26 @@ private:
             std::string response;
             try {
                 if (path == "/metrics") {
-                    // Prometheus metrics endpoint
-                    logger_.info("Building metrics response");
+                    // Prometheus metrics endpoint - all services
+                    logger_.info("Building aggregated metrics response");
                     response = build_metrics_response();
                     logger_.info("Metrics response size: " + std::to_string(response.length()));
+                } else if (path == "/metrics/market_data") {
+                    // Market Data Handler specific metrics
+                    logger_.info("Building market data metrics response");
+                    response = build_service_metrics_response("MarketDataHandler");
+                } else if (path == "/metrics/strategy_engine") {
+                    // Strategy Engine specific metrics
+                    logger_.info("Building strategy engine metrics response");
+                    response = build_service_metrics_response("StrategyEngine");
+                } else if (path == "/metrics/order_gateway") {
+                    // Order Gateway specific metrics
+                    logger_.info("Building order gateway metrics response");
+                    response = build_service_metrics_response("OrderGateway");
+                } else if (path == "/metrics/position_service") {
+                    // Position & Risk Service specific metrics
+                    logger_.info("Building position service metrics response");
+                    response = build_service_metrics_response("PositionRiskService");
                 } else {
                     // Default: return current messages
                     logger_.info("Building default HTTP response");
@@ -413,6 +429,43 @@ private:
             
             // Return a minimal valid response
             std::string error_data = "# Error generating metrics\n";
+            std::ostringstream response;
+            response << "HTTP/1.1 200 OK\r\n";
+            response << "Content-Type: text/plain\r\n";
+            response << "Access-Control-Allow-Origin: *\r\n";
+            response << "Content-Length: " << error_data.length() << "\r\n";
+            response << "\r\n";
+            response << error_data;
+            
+            return response.str();
+        }
+    }
+    
+    std::string build_service_metrics_response(const std::string& service_name) {
+        try {
+            // Get metrics for specific service
+            logger_.info("Getting metrics for service: " + service_name);
+            auto service_metrics = metrics_aggregator_.get_service_metrics(service_name);
+            logger_.info("Got " + std::to_string(service_metrics.size()) + " metrics for " + service_name + ", exporting...");
+            
+            std::string metrics_data = PrometheusExporter::export_metrics(&service_metrics);
+            logger_.info("Exported service metrics data, size: " + std::to_string(metrics_data.length()));
+            
+            std::ostringstream response;
+            response << "HTTP/1.1 200 OK\r\n";
+            response << "Content-Type: " << PrometheusExporter::get_content_type() << "\r\n";
+            response << "Access-Control-Allow-Origin: *\r\n";
+            response << "Content-Length: " << metrics_data.length() << "\r\n";
+            response << "\r\n";
+            response << metrics_data;
+            
+            return response.str();
+            
+        } catch (const std::exception& e) {
+            logger_.error("Exception in build_service_metrics_response for " + service_name + ": " + std::string(e.what()));
+            
+            // Return a minimal valid response
+            std::string error_data = "# Error generating metrics for " + service_name + "\n";
             std::ostringstream response;
             response << "HTTP/1.1 200 OK\r\n";
             response << "Content-Type: text/plain\r\n";

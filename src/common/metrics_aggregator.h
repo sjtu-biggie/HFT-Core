@@ -37,6 +37,9 @@ public:
     std::unordered_map<std::string, MetricStats> get_all_metrics() const;
     std::vector<std::string> get_online_services() const;
     
+    // Get metrics for a specific service
+    std::unordered_map<std::string, MetricStats> get_service_metrics(const std::string& service_name) const;
+    
     // Initialize all expected metrics with zero values
     void initialize_default_metrics();
 

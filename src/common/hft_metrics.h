@@ -16,94 +16,177 @@ namespace metrics {
 // CRITICAL PATH LATENCIES (RDTSC-based, nanosecond precision)
 // =======================
 
-// Market Data Processing Chain
-constexpr const char* MD_RECEIVE_LATENCY = "md.receive_latency_ns";
-constexpr const char* MD_PARSE_LATENCY = "md.parse_latency_ns";
-constexpr const char* MD_NORMALIZE_LATENCY = "md.normalize_latency_ns";  
-constexpr const char* MD_PUBLISH_LATENCY = "md.publish_latency_ns";
-constexpr const char* MD_QUEUE_LATENCY = "md.queue_latency_ns";
-constexpr const char* MD_TOTAL_LATENCY = "md.total_latency_ns";
+// Market Data Processing Chain - remove prefixes, use service labels
+constexpr const char* RECEIVE_LATENCY = "receive_latency_ns";
+constexpr const char* PARSE_LATENCY = "parse_latency_ns";
+constexpr const char* NORMALIZE_LATENCY = "normalize_latency_ns";  
+constexpr const char* PUBLISH_LATENCY = "publish_latency_ns";
+constexpr const char* QUEUE_LATENCY = "queue_latency_ns";
+constexpr const char* TOTAL_LATENCY = "total_latency_ns";
 
-// Strategy Engine Processing  
-constexpr const char* STRATEGY_RECEIVE_LATENCY = "strategy.receive_latency_ns";
-constexpr const char* STRATEGY_PROCESS_LATENCY = "strategy.process_latency_ns";
-constexpr const char* STRATEGY_DECISION_LATENCY = "strategy.decision_latency_ns";
-constexpr const char* STRATEGY_SIGNAL_LATENCY = "strategy.signal_latency_ns";
-constexpr const char* STRATEGY_PUBLISH_LATENCY = "strategy.publish_latency_ns";
-constexpr const char* STRATEGY_TOTAL_LATENCY = "strategy.total_latency_ns";
+// Backward compatibility - deprecated, use above constants
+constexpr const char* MD_RECEIVE_LATENCY = "receive_latency_ns";
+constexpr const char* MD_PARSE_LATENCY = "parse_latency_ns";
+constexpr const char* MD_NORMALIZE_LATENCY = "normalize_latency_ns";  
+constexpr const char* MD_PUBLISH_LATENCY = "publish_latency_ns";
+constexpr const char* MD_QUEUE_LATENCY = "queue_latency_ns";
+constexpr const char* MD_TOTAL_LATENCY = "total_latency_ns";
 
-// Order Gateway Processing
-constexpr const char* ORDER_RECEIVE_LATENCY = "order.receive_latency_ns";
-constexpr const char* ORDER_VALIDATE_LATENCY = "order.validate_latency_ns";
-constexpr const char* ORDER_RISK_CHECK_LATENCY = "order.risk_check_latency_ns";
-constexpr const char* ORDER_SUBMIT_LATENCY = "order.submit_latency_ns";
-constexpr const char* ORDER_ACK_LATENCY = "order.ack_latency_ns";
-constexpr const char* ORDER_FILL_LATENCY = "order.fill_latency_ns";
-constexpr const char* ORDER_TOTAL_LATENCY = "order.total_latency_ns";
+// Strategy Engine Processing - add missing constants used by strategy_engine.cpp
+constexpr const char* SIGNAL_GENERATION = "signal_generation_latency_ns";  // Missing in strategy engine
+constexpr const char* STRATEGY_PROCESS = "process_latency_ns";               // Missing in strategy engine  
+constexpr const char* SIGNAL_PUBLISH = "signal_publish_latency_ns";         // Missing in strategy engine
+constexpr const char* MARKET_DATA_MESSAGES = "market_data_messages_total";   // Missing in strategy engine
+constexpr const char* SIGNALS_GENERATED = "signals_generated_total";        // Missing in strategy engine
 
-// End-to-End Critical Path Latencies
-constexpr const char* E2E_TICK_TO_SIGNAL = "e2e.tick_to_signal_ns";
-constexpr const char* E2E_SIGNAL_TO_ORDER = "e2e.signal_to_order_ns";  
-constexpr const char* E2E_TICK_TO_FILL = "e2e.tick_to_fill_ns";
-constexpr const char* E2E_TICK_TO_ORDER = "e2e.tick_to_order_ns";
+// Strategy Engine Processing - remove prefixes, use service labels
+constexpr const char* RECEIVE_LATENCY_STRATEGY = "receive_latency_ns";
+constexpr const char* PROCESS_LATENCY = "process_latency_ns";
+constexpr const char* DECISION_LATENCY = "decision_latency_ns";
+constexpr const char* SIGNAL_LATENCY = "signal_latency_ns";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* STRATEGY_RECEIVE_LATENCY = "receive_latency_ns";
+constexpr const char* STRATEGY_PROCESS_LATENCY = "process_latency_ns";
+constexpr const char* STRATEGY_DECISION_LATENCY = "decision_latency_ns";
+constexpr const char* STRATEGY_SIGNAL_LATENCY = "signal_latency_ns";
+constexpr const char* STRATEGY_PUBLISH_LATENCY = "publish_latency_ns";
+constexpr const char* STRATEGY_TOTAL_LATENCY = "total_latency_ns";
+
+// Order Gateway Processing - remove prefixes, use service labels
+constexpr const char* VALIDATE_LATENCY = "validate_latency_ns";
+constexpr const char* RISK_CHECK_LATENCY = "risk_check_latency_ns";
+constexpr const char* SUBMIT_LATENCY = "submit_latency_ns";
+constexpr const char* ACK_LATENCY = "ack_latency_ns";
+constexpr const char* FILL_LATENCY = "fill_latency_ns";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* ORDER_RECEIVE_LATENCY = "receive_latency_ns";
+constexpr const char* ORDER_VALIDATE_LATENCY = "validate_latency_ns";
+constexpr const char* ORDER_RISK_CHECK_LATENCY = "risk_check_latency_ns";
+constexpr const char* ORDER_SUBMIT_LATENCY = "submit_latency_ns";
+constexpr const char* ORDER_ACK_LATENCY = "ack_latency_ns";
+constexpr const char* ORDER_FILL_LATENCY = "fill_latency_ns";
+constexpr const char* ORDER_TOTAL_LATENCY = "total_latency_ns";
+
+// End-to-End Critical Path Latencies - remove prefixes, use service labels
+constexpr const char* TICK_TO_SIGNAL = "tick_to_signal_ns";
+constexpr const char* SIGNAL_TO_ORDER = "signal_to_order_ns";  
+constexpr const char* TICK_TO_FILL = "tick_to_fill_ns";
+constexpr const char* TICK_TO_ORDER = "tick_to_order_ns";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* E2E_TICK_TO_SIGNAL = "tick_to_signal_ns";
+constexpr const char* E2E_SIGNAL_TO_ORDER = "signal_to_order_ns";  
+constexpr const char* E2E_TICK_TO_FILL = "tick_to_fill_ns";
+constexpr const char* E2E_TICK_TO_ORDER = "tick_to_order_ns";
 
 // =======================
 // COMPONENT THROUGHPUT (Messages/Operations per second)
 // =======================
 
-// Market Data Handler
-constexpr const char* MD_MESSAGES_RECEIVED = "md.messages_received_total";
-constexpr const char* MD_MESSAGES_PROCESSED = "md.messages_processed_total";
-constexpr const char* MD_MESSAGES_PUBLISHED = "md.messages_published_total";
-constexpr const char* MD_MESSAGES_DROPPED = "md.messages_dropped_total";
-constexpr const char* MD_MESSAGES_PER_SEC = "md.messages_per_second";
-constexpr const char* MD_BYTES_RECEIVED = "md.bytes_received_total";
+// Message Counters - remove prefixes, use service labels
+constexpr const char* MESSAGES_RECEIVED = "messages_received_total";
+constexpr const char* MESSAGES_PROCESSED = "messages_processed_total";
+constexpr const char* MESSAGES_PUBLISHED = "messages_published_total";
+constexpr const char* MESSAGES_DROPPED = "messages_dropped_total";
+constexpr const char* MESSAGES_PER_SECOND = "messages_per_second";
+constexpr const char* BYTES_RECEIVED_TOTAL = "bytes_received_total";
 
-// Strategy Engine
-constexpr const char* STRATEGY_SIGNALS_GENERATED = "strategy.signals_generated_total";
-constexpr const char* STRATEGY_SIGNALS_PUBLISHED = "strategy.signals_published_total";  
-constexpr const char* STRATEGY_DECISIONS_TOTAL = "strategy.decisions_total";
-constexpr const char* STRATEGY_DECISIONS_PER_SEC = "strategy.decisions_per_second";
-constexpr const char* STRATEGY_BUY_SIGNALS = "strategy.buy_signals_total";
-constexpr const char* STRATEGY_SELL_SIGNALS = "strategy.sell_signals_total";
+// Backward compatibility - deprecated, use above constants
+constexpr const char* MD_MESSAGES_RECEIVED = "messages_received_total";
+constexpr const char* MD_MESSAGES_PROCESSED = "messages_processed_total";
+constexpr const char* MD_MESSAGES_PUBLISHED = "messages_published_total";
+constexpr const char* MD_MESSAGES_DROPPED = "messages_dropped_total";
+constexpr const char* MD_MESSAGES_PER_SEC = "messages_per_second";
+constexpr const char* MD_BYTES_RECEIVED = "bytes_received_total";
 
-// Order Gateway
-constexpr const char* ORDERS_RECEIVED = "orders.received_total";
-constexpr const char* ORDERS_SUBMITTED = "orders.submitted_total";
-constexpr const char* ORDERS_FILLED = "orders.filled_total";
-constexpr const char* ORDERS_REJECTED = "orders.rejected_total";
-constexpr const char* ORDERS_CANCELLED = "orders.cancelled_total";
-constexpr const char* ORDERS_PER_SEC = "orders.per_second";
+// Signal Counters - remove prefixes, use service labels
+constexpr const char* SIGNALS_PUBLISHED = "signals_published_total";
+constexpr const char* DECISIONS_TOTAL = "decisions_total";
+constexpr const char* DECISIONS_PER_SECOND = "decisions_per_second";
+constexpr const char* BUY_SIGNALS = "buy_signals_total";
+constexpr const char* SELL_SIGNALS = "sell_signals_total";
 
-// Position & Risk Service
-constexpr const char* POSITIONS_UPDATED = "positions.updated_total";
-constexpr const char* RISK_CHECKS = "risk.checks_total";
-constexpr const char* RISK_VIOLATIONS = "risk.violations_total";
+// Backward compatibility - deprecated, use above constants
+constexpr const char* STRATEGY_SIGNALS_GENERATED = "signals_generated_total";
+constexpr const char* STRATEGY_SIGNALS_PUBLISHED = "signals_published_total";  
+constexpr const char* STRATEGY_DECISIONS_TOTAL = "decisions_total";
+constexpr const char* STRATEGY_DECISIONS_PER_SEC = "decisions_per_second";
+constexpr const char* STRATEGY_BUY_SIGNALS = "buy_signals_total";
+constexpr const char* STRATEGY_SELL_SIGNALS = "sell_signals_total";
+
+// Order Counters - remove prefixes, use service labels
+constexpr const char* ORDERS_RECEIVED_TOTAL = "orders_received_total";
+constexpr const char* ORDERS_SUBMITTED_TOTAL = "orders_submitted_total";
+constexpr const char* ORDERS_FILLED_TOTAL = "orders_filled_total";
+constexpr const char* ORDERS_REJECTED_TOTAL = "orders_rejected_total";
+constexpr const char* ORDERS_CANCELLED_TOTAL = "orders_cancelled_total";
+constexpr const char* ORDERS_PER_SECOND = "orders_per_second";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* ORDERS_RECEIVED = "orders_received_total";
+constexpr const char* ORDERS_SUBMITTED = "orders_submitted_total";
+constexpr const char* ORDERS_FILLED = "orders_filled_total";
+constexpr const char* ORDERS_REJECTED = "orders_rejected_total";
+constexpr const char* ORDERS_CANCELLED = "orders_cancelled_total";
+constexpr const char* ORDERS_PER_SEC = "orders_per_second";
+
+// Position & Risk Counters - remove prefixes, use service labels
+constexpr const char* POSITIONS_UPDATED_TOTAL = "positions_updated_total";
+constexpr const char* RISK_CHECKS_TOTAL = "risk_checks_total";
+constexpr const char* RISK_VIOLATIONS_TOTAL = "risk_violations_total";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* POSITIONS_UPDATED = "positions_updated_total";
+constexpr const char* RISK_CHECKS = "risk_checks_total";
+constexpr const char* RISK_VIOLATIONS = "risk_violations_total";
 
 // =======================
 // TRADING PERFORMANCE METRICS
 // =======================
 
-// Position Tracking
-constexpr const char* POSITIONS_OPEN = "trading.positions_open";
-constexpr const char* POSITIONS_CLOSED = "trading.positions_closed_total";
-constexpr const char* POSITION_SIZE = "trading.position_size";
-constexpr const char* GROSS_EXPOSURE = "trading.gross_exposure_usd";
-constexpr const char* NET_EXPOSURE = "trading.net_exposure_usd";
+// Position Tracking - remove prefixes, use service labels
+constexpr const char* POSITIONS_OPEN_COUNT = "positions_open";
+constexpr const char* POSITIONS_CLOSED_TOTAL = "positions_closed_total";
+constexpr const char* POSITION_SIZE_CURRENT = "position_size";
+constexpr const char* GROSS_EXPOSURE_USD = "gross_exposure_usd";
+constexpr const char* NET_EXPOSURE_USD = "net_exposure_usd";
 
-// P&L Metrics
-constexpr const char* PNL_REALIZED = "trading.pnl_realized_usd";
-constexpr const char* PNL_UNREALIZED = "trading.pnl_unrealized_usd";
-constexpr const char* PNL_TOTAL = "trading.pnl_total_usd";
-constexpr const char* PNL_DAY = "trading.pnl_day_usd";
-constexpr const char* PNL_MTD = "trading.pnl_mtd_usd";
+// Backward compatibility - deprecated, use above constants
+constexpr const char* POSITIONS_OPEN = "positions_open";
+constexpr const char* POSITIONS_CLOSED = "positions_closed_total";
+constexpr const char* POSITION_SIZE = "position_size";
+constexpr const char* GROSS_EXPOSURE = "gross_exposure_usd";
+constexpr const char* NET_EXPOSURE = "net_exposure_usd";
 
-// Execution Quality
-constexpr const char* FILL_RATE = "trading.fill_rate_percent";
-constexpr const char* SLIPPAGE_BPS = "trading.slippage_bps";
-constexpr const char* SPREAD_CAPTURE = "trading.spread_capture_bps";
-constexpr const char* ADVERSE_SELECTION = "trading.adverse_selection_bps";
-constexpr const char* AVG_FILL_SIZE = "trading.avg_fill_size";
+// P&L Metrics - remove prefixes, use service labels
+constexpr const char* PNL_REALIZED_USD = "pnl_realized_usd";
+constexpr const char* PNL_UNREALIZED_USD = "pnl_unrealized_usd";
+constexpr const char* PNL_TOTAL_USD = "pnl_total_usd";
+constexpr const char* PNL_DAY_USD = "pnl_day_usd";
+constexpr const char* PNL_MTD_USD = "pnl_mtd_usd";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* PNL_REALIZED = "pnl_realized_usd";
+constexpr const char* PNL_UNREALIZED = "pnl_unrealized_usd";
+constexpr const char* PNL_TOTAL = "pnl_total_usd";
+constexpr const char* PNL_DAY = "pnl_day_usd";
+constexpr const char* PNL_MTD = "pnl_mtd_usd";
+
+// Execution Quality - remove prefixes, use service labels
+constexpr const char* FILL_RATE_PERCENT = "fill_rate_percent";
+constexpr const char* SLIPPAGE_BPS_AVG = "slippage_bps";
+constexpr const char* SPREAD_CAPTURE_BPS = "spread_capture_bps";
+constexpr const char* ADVERSE_SELECTION_BPS = "adverse_selection_bps";
+constexpr const char* AVG_FILL_SIZE_SHARES = "avg_fill_size";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* FILL_RATE = "fill_rate_percent";
+constexpr const char* SLIPPAGE_BPS = "slippage_bps";
+constexpr const char* SPREAD_CAPTURE = "spread_capture_bps";
+constexpr const char* ADVERSE_SELECTION = "adverse_selection_bps";
+constexpr const char* AVG_FILL_SIZE = "avg_fill_size";
 
 // Risk Metrics
 constexpr const char* VAR_1DAY = "risk.var_1day_usd";
@@ -115,23 +198,41 @@ constexpr const char* LEVERAGE_RATIO = "risk.leverage_ratio";
 // SYSTEM PERFORMANCE METRICS  
 // =======================
 
-// Memory Usage (per component)
-constexpr const char* MEMORY_RSS = "system.memory_rss_mb";
-constexpr const char* MEMORY_VMS = "system.memory_vms_mb";
-constexpr const char* MEMORY_HEAP = "system.memory_heap_mb";
-constexpr const char* MEMORY_STACK = "system.memory_stack_mb";
+// Memory Usage - remove prefixes, use service labels
+constexpr const char* MEMORY_RSS_MB = "memory_rss_mb";
+constexpr const char* MEMORY_VMS_MB = "memory_vms_mb";
+constexpr const char* MEMORY_HEAP_MB = "memory_heap_mb";
+constexpr const char* MEMORY_STACK_MB = "memory_stack_mb";
 
-// CPU Usage (per component and core) - avoid conflicts with metrics_collector.h
-constexpr const char* HFT_CPU_USAGE = "system.cpu_usage_percent";
-constexpr const char* CPU_CORE_USAGE = "system.cpu_core_usage_percent";
-constexpr const char* CPU_CONTEXT_SWITCHES = "system.context_switches_total";
-constexpr const char* CPU_CACHE_MISSES = "system.cache_misses_total";
+// Backward compatibility - deprecated, use above constants
+constexpr const char* MEMORY_RSS = "memory_rss_mb";
+constexpr const char* MEMORY_VMS = "memory_vms_mb";
+constexpr const char* MEMORY_HEAP = "memory_heap_mb";
+constexpr const char* MEMORY_STACK = "memory_stack_mb";
 
-// Threading and Concurrency
-constexpr const char* THREAD_COUNT = "system.thread_count";
-constexpr const char* LOCK_CONTENTION = "system.lock_contention_ns";
-constexpr const char* HFT_QUEUE_DEPTH = "system.queue_depth";
-constexpr const char* QUEUE_FULL_EVENTS = "system.queue_full_events_total";
+// CPU Usage - remove prefixes, use service labels
+constexpr const char* CPU_USAGE_PERCENT = "cpu_usage_percent";
+constexpr const char* CPU_CORE_USAGE_PERCENT = "cpu_core_usage_percent";
+constexpr const char* CPU_CONTEXT_SWITCHES_TOTAL = "context_switches_total";
+constexpr const char* CPU_CACHE_MISSES_TOTAL = "cache_misses_total";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* HFT_CPU_USAGE = "cpu_usage_percent";
+constexpr const char* CPU_CORE_USAGE = "cpu_core_usage_percent";
+constexpr const char* CPU_CONTEXT_SWITCHES = "context_switches_total";
+constexpr const char* CPU_CACHE_MISSES = "cache_misses_total";
+
+// Threading and Concurrency - remove prefixes, use service labels
+constexpr const char* THREAD_COUNT_CURRENT = "thread_count";
+constexpr const char* LOCK_CONTENTION_NS = "lock_contention_ns";
+constexpr const char* QUEUE_DEPTH_CURRENT = "queue_depth";
+constexpr const char* QUEUE_FULL_EVENTS_TOTAL = "queue_full_events_total";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* THREAD_COUNT = "thread_count";
+constexpr const char* LOCK_CONTENTION = "lock_contention_ns";
+constexpr const char* HFT_QUEUE_DEPTH = "queue_depth";
+constexpr const char* QUEUE_FULL_EVENTS = "queue_full_events_total";
 
 // Garbage Collection (if applicable)
 constexpr const char* GC_COLLECTIONS = "system.gc_collections_total";
@@ -142,13 +243,21 @@ constexpr const char* GC_ALLOCATED = "system.gc_allocated_mb";
 // NETWORK PERFORMANCE METRICS
 // =======================
 
-// Network I/O
-constexpr const char* NETWORK_BYTES_SENT = "network.bytes_sent_total";
-constexpr const char* NETWORK_BYTES_RECV = "network.bytes_received_total";
-constexpr const char* NETWORK_PACKETS_SENT = "network.packets_sent_total";
-constexpr const char* NETWORK_PACKETS_RECV = "network.packets_received_total";
-constexpr const char* NETWORK_ERRORS = "network.errors_total";
-constexpr const char* NETWORK_DROPS = "network.drops_total";
+// Network I/O - remove prefixes, use service labels
+constexpr const char* NETWORK_BYTES_SENT_TOTAL = "network_bytes_sent_total";
+constexpr const char* NETWORK_BYTES_RECV_TOTAL = "network_bytes_received_total";
+constexpr const char* NETWORK_PACKETS_SENT_TOTAL = "network_packets_sent_total";
+constexpr const char* NETWORK_PACKETS_RECV_TOTAL = "network_packets_received_total";
+constexpr const char* NETWORK_ERRORS_TOTAL = "network_errors_total";
+constexpr const char* NETWORK_DROPS_TOTAL = "network_drops_total";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* NETWORK_BYTES_SENT = "network_bytes_sent_total";
+constexpr const char* NETWORK_BYTES_RECV = "network_bytes_received_total";
+constexpr const char* NETWORK_PACKETS_SENT = "network_packets_sent_total";
+constexpr const char* NETWORK_PACKETS_RECV = "network_packets_received_total";
+constexpr const char* NETWORK_ERRORS = "network_errors_total";
+constexpr const char* NETWORK_DROPS = "network_drops_total";
 
 // Connection Health
 constexpr const char* CONNECTION_COUNT = "network.connections_active";
@@ -203,11 +312,19 @@ constexpr const char* ARB_PROFIT = "arb.profit_usd";
 // COMPONENT HEALTH STATUS
 // =======================
 
-constexpr const char* COMPONENT_STATUS = "health.component_status";
-constexpr const char* SERVICE_UPTIME = "health.uptime_seconds";
-constexpr const char* HEARTBEAT = "health.heartbeat_timestamp";
-constexpr const char* ERROR_RATE = "health.error_rate_percent";
-constexpr const char* WARNING_COUNT = "health.warnings_total";
+// Component Health Status - remove prefixes, use service labels
+constexpr const char* COMPONENT_STATUS_FLAG = "component_status";
+constexpr const char* SERVICE_UPTIME_SECONDS = "uptime_seconds";
+constexpr const char* HEARTBEAT_TIMESTAMP = "heartbeat_timestamp";
+constexpr const char* ERROR_RATE_PERCENT = "error_rate_percent";
+constexpr const char* WARNING_COUNT_TOTAL = "warnings_total";
+
+// Backward compatibility - deprecated, use above constants
+constexpr const char* COMPONENT_STATUS = "component_status";
+constexpr const char* SERVICE_UPTIME = "uptime_seconds";
+constexpr const char* HEARTBEAT = "heartbeat_timestamp";
+constexpr const char* ERROR_RATE = "error_rate_percent";
+constexpr const char* WARNING_COUNT = "warnings_total";
 
 } // namespace metrics
 
@@ -275,5 +392,9 @@ void shutdown_hft_metrics();
 #define HFT_COMPONENT_COUNTER(name) hft::MetricsCollector::instance().increment_counter(name)
 #define HFT_LATENCY_NS(label, ns) hft::MetricsCollector::instance().record_latency(label, ns)
 #define HFT_GAUGE_VALUE(label, value) hft::MetricsCollector::instance().set_gauge(label, value)
+
+// Additional macros for strategy engine compatibility
+#define HFT_METRICS_TIMER(label) hft::RDTSCTimer _metrics_timer(label)
+#define HFT_METRICS_COUNTER(name) hft::MetricsCollector::instance().increment_counter(name)
 
 } // namespace hft

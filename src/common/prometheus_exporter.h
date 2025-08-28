@@ -338,6 +338,13 @@ private:
         
         return sanitized;
     }
+    
+    static std::string get_service_label(const MetricStats& stats) {
+        if (!stats.service_name.empty() && stats.service_name != "system") {
+            return "{service=\"" + stats.service_name + "\"}";
+        }
+        return "";
+    }
 };
 
 } // namespace hft

@@ -1,13 +1,16 @@
 #include "order_gateway.h"
 #include "../common/static_config.h"
+#include "../common/hft_metrics.h"
+#include "../common/metrics_publisher.h"
 #include <random>
 #include <chrono>
 
 namespace hft {
 
 OrderGateway::OrderGateway()
-    : running_(false), next_order_id_(1), use_alpaca_(false), orders_processed_(0), orders_filled_(0)
-    , logger_("OrderGateway", StaticConfig::get_logger_endpoint()) {
+    : running_(false), next_order_id_(1), use_alpaca_(false), orders_processed_(0), orders_filled_(0), orders_rejected_(0)
+    , logger_("OrderGateway", StaticConfig::get_logger_endpoint())
+    , metrics_publisher_("OrderGateway", "tcp://*:5563") {
 }
 
 OrderGateway::~OrderGateway() {
@@ -16,6 +19,12 @@ OrderGateway::~OrderGateway() {
 
 bool OrderGateway::initialize() {
     logger_.info("Initializing Order Gateway");
+    
+    // Initialize metrics publisher
+    if (!metrics_publisher_.initialize()) {
+        logger_.error("Failed to initialize metrics publisher");
+        return false;
+    }
     
     try {
         context_ = std::make_unique<zmq::context_t>(1);
@@ -78,6 +87,9 @@ void OrderGateway::start() {
     logger_.info("Starting Order Gateway");
     running_.store(true);
     
+    // Start metrics publisher
+    metrics_publisher_.start();
+    
     processing_thread_ = std::make_unique<std::thread>(&OrderGateway::process_signals, this);
     logger_.info("Order Gateway started");
 }
@@ -89,6 +101,9 @@ void OrderGateway::stop() {
     
     logger_.info("Stopping Order Gateway");
     running_.store(false);
+    
+    // Stop metrics publisher
+    metrics_publisher_.stop();
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();
@@ -141,6 +156,8 @@ void OrderGateway::process_signals() {
 }
 
 void OrderGateway::handle_trading_signal(const TradingSignal& signal) {
+    HFT_RDTSC_TIMER(hft::metrics::TOTAL_LATENCY);
+    
     // Create new order
     uint64_t order_id = next_order_id_++;
     Order order(order_id, signal);
@@ -154,6 +171,9 @@ void OrderGateway::handle_trading_signal(const TradingSignal& signal) {
     active_orders_[order_id] = order;
     orders_processed_++;
     
+    // Record metrics
+    HFT_COMPONENT_COUNTER(hft::metrics::ORDERS_RECEIVED_TOTAL);
+    
     // Route to appropriate execution method
     if (use_alpaca_) {
         handle_alpaca_order(active_orders_[order_id]);
@@ -163,13 +183,38 @@ void OrderGateway::handle_trading_signal(const TradingSignal& signal) {
 }
 
 void OrderGateway::simulate_order_fill(const Order& order) {
+    HFT_RDTSC_TIMER(hft::metrics::SUBMIT_LATENCY);
+    
     // Simulate realistic order fill behavior
     std::random_device rd;
     std::mt19937 gen(rd());
     
+    // Validate order first
+    {
+        HFT_RDTSC_TIMER(hft::metrics::VALIDATE_LATENCY);
+        if (order.quantity == 0 || order.symbol.empty()) {
+            orders_rejected_++;
+            HFT_COMPONENT_COUNTER(hft::metrics::ORDERS_REJECTED_TOTAL);
+            return;
+        }
+    }
+    
+    // Risk check simulation
+    {
+        HFT_RDTSC_TIMER(hft::metrics::RISK_CHECK_LATENCY);
+        // Simulate risk check processing
+        std::this_thread::sleep_for(std::chrono::microseconds(50));
+    }
+    
     // Simulate fill delay
     std::uniform_int_distribution<> delay_dist(10, 100); // 10-100ms
+    auto fill_start = std::chrono::steady_clock::now();
     std::this_thread::sleep_for(std::chrono::milliseconds(delay_dist(gen)));
+    
+    // Record fill latency
+    auto fill_end = std::chrono::steady_clock::now();
+    auto fill_latency_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(fill_end - fill_start).count();
+    HFT_LATENCY_NS(hft::metrics::FILL_LATENCY, fill_latency_ns);
     
     // Simulate fill price with some slippage
     double fill_price = order.price;
@@ -195,6 +240,14 @@ void OrderGateway::simulate_order_fill(const Order& order) {
     // Remove from active orders
     active_orders_.erase(order.order_id);
     orders_filled_++;
+    
+    // Record metrics
+    HFT_COMPONENT_COUNTER(hft::metrics::ORDERS_FILLED_TOTAL);
+    HFT_COMPONENT_COUNTER(hft::metrics::ORDERS_SUBMITTED_TOTAL);
+    
+    // Calculate and record fill rate
+    double fill_rate = (orders_filled_.load() * 100.0) / std::max(orders_processed_.load(), 1UL);
+    HFT_GAUGE_VALUE(hft::metrics::FILL_RATE_PERCENT, static_cast<uint64_t>(fill_rate));
 }
 
 void OrderGateway::handle_alpaca_order(Order& order) {
@@ -261,6 +314,8 @@ void OrderGateway::handle_alpaca_order(Order& order) {
 }
 
 void OrderGateway::publish_execution(const OrderExecution& execution) {
+    HFT_RDTSC_TIMER(hft::metrics::PUBLISH_LATENCY);
+    
     try {
         zmq::message_t message(sizeof(OrderExecution));
         std::memcpy(message.data(), &execution, sizeof(OrderExecution));
@@ -270,6 +325,16 @@ void OrderGateway::publish_execution(const OrderExecution& execution) {
         logger_.info("Execution: " + std::string(execution.symbol) +
                     " " + std::to_string(execution.fill_quantity) + 
                     " @ " + std::to_string(execution.fill_price));
+        
+        // Update throughput metrics
+        static auto last_rate_update = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_rate_update).count();
+        if (elapsed >= 1) {
+            uint64_t orders_per_sec = orders_filled_.load() / std::max(elapsed, 1L);
+            HFT_GAUGE_VALUE(hft::metrics::ORDERS_PER_SECOND, orders_per_sec);
+            last_rate_update = now;
+        }
         
     } catch (const zmq::error_t& e) {
         if (e.num() != EAGAIN) {
@@ -281,11 +346,22 @@ void OrderGateway::publish_execution(const OrderExecution& execution) {
 void OrderGateway::log_statistics() {
     uint64_t processed = orders_processed_.load();
     uint64_t filled = orders_filled_.load();
+    uint64_t rejected = orders_rejected_.load();
     
     std::string stats = "Processed " + std::to_string(processed) +
                        " orders, filled " + std::to_string(filled) +
+                       " orders, rejected " + std::to_string(rejected) +
                        " orders, " + std::to_string(active_orders_.size()) + " active";
     logger_.info(stats);
+    
+    // Update gauge metrics
+    HFT_GAUGE_VALUE(hft::metrics::POSITIONS_OPEN_COUNT, active_orders_.size());
+    
+    // Update counters that might have been missed
+    // (Note: In a real system, these would be updated atomically at the time of the event)
+    for (uint64_t i = 0; i < processed; ++i) {
+        // This is a simplified approach for demo - in production you'd update these individually
+    }
 }
 
 } // namespace hft

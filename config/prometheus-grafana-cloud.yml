@@ -36,36 +36,36 @@ alerting:
           - alertmanager:9093
 
 scrape_configs:
-  # HFT Core Services - High frequency scraping
-  - job_name: 'hft-core-services'
+  # HFT Aggregated Metrics - All services combined
+  - job_name: 'hft-all-services'
     scrape_interval: 5s
     scrape_timeout: 2s
     metrics_path: /metrics
     static_configs:
       - targets:
-          - 'localhost:8080'  # WebSocket Bridge (Prometheus endpoint)
+          - 'localhost:8080'  # WebSocket Bridge (Aggregated endpoint)
         labels:
-          service: 'websocket_bridge'
+          service: 'aggregated'
           tier: 'infrastructure'
           
-  # Market Data Handler - Critical path metrics
+  # Market Data Handler - Service-specific metrics
   - job_name: 'hft-market-data'
     scrape_interval: 5s
     scrape_timeout: 2s
-    metrics_path: /metrics
+    metrics_path: /metrics/market_data
     static_configs:
       - targets:
-          - 'localhost:8080'  # All metrics exposed through WebSocket Bridge
+          - 'localhost:8080'  # Service-specific endpoint
         labels:
           service: 'market_data_handler'
           tier: 'core'
           component: 'data_ingestion'
 
-  # Strategy Engine - Trading decision metrics
+  # Strategy Engine - Service-specific metrics
   - job_name: 'hft-strategy-engine'
     scrape_interval: 5s
     scrape_timeout: 2s
-    metrics_path: /metrics
+    metrics_path: /metrics/strategy_engine
     static_configs:
       - targets:
           - 'localhost:8080'
@@ -74,11 +74,11 @@ scrape_configs:
           tier: 'core'
           component: 'trading_logic'
 
-  # Order Gateway - Execution metrics
+  # Order Gateway - Service-specific metrics
   - job_name: 'hft-order-gateway'
     scrape_interval: 5s
     scrape_timeout: 2s
-    metrics_path: /metrics
+    metrics_path: /metrics/order_gateway
     static_configs:
       - targets:
           - 'localhost:8080'
@@ -87,11 +87,11 @@ scrape_configs:
           tier: 'core'
           component: 'execution'
 
-  # Position & Risk Service - Risk management
+  # Position & Risk Service - Service-specific metrics
   - job_name: 'hft-position-risk'
     scrape_interval: 5s
     scrape_timeout: 2s
-    metrics_path: /metrics
+    metrics_path: /metrics/position_service
     static_configs:
       - targets:
           - 'localhost:8080'
@@ -100,20 +100,7 @@ scrape_configs:
           tier: 'core'
           component: 'risk_management'
 
-  # System Metrics - Host-level monitoring
-  - job_name: 'hft-system-metrics'
-    scrape_interval: 5s     # Slightly slower for system metrics
-    scrape_timeout: 2s
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - 'localhost:8080'
-        labels:
-          service: 'system_monitor'
-          tier: 'infrastructure'
-          component: 'system_health'
-
-  # Control API - System control metrics
+  # Control API - System control metrics (separate port)
   - job_name: 'hft-control-api'
     scrape_interval: 5s
     scrape_timeout: 2s

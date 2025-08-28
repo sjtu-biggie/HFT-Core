@@ -3,6 +3,7 @@
 #include "../common/message_types.h"
 #include "../common/logging.h"
 #include "../common/config.h"
+#include "../common/metrics_publisher.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -52,6 +53,14 @@ private:
     double max_position_value_;
     double max_daily_loss_;
     double current_daily_pnl_;
+    
+    // Statistics
+    std::atomic<uint64_t> positions_updated_;
+    std::atomic<uint64_t> risk_checks_;
+    std::atomic<uint64_t> risk_violations_;
+    
+    // Metrics
+    MetricsPublisher metrics_publisher_;
     
     void process_messages();
     void handle_execution(const OrderExecution& execution);
