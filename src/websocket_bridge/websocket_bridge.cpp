@@ -75,9 +75,9 @@ public:
             execution_subscriber_.connect(exec_endpoint);
             logger_.info("Connected to executions endpoint: " + exec_endpoint);
             
-            // Bind control publisher - using port 5561 for control commands
-            control_publisher_.bind("tcp://*:5561");
-            logger_.info("Control publisher bound to tcp://*:5561");
+            // Bind control publisher - using port 5570 for control commands
+            control_publisher_.bind("tcp://*:5570");
+            logger_.info("Control publisher bound to tcp://*:5570");
             
             // Create HTTP server socket
             server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
@@ -641,11 +641,11 @@ private:
         
         // Build HTTP response
         std::ostringstream response;
-        response << "HTTP/1.1 200 OK\\r\\n";
-        response << "Content-Type: application/json\\r\\n";
-        response << "Access-Control-Allow-Origin: *\\r\\n";
-        response << "Content-Length: " << body.length() << "\\r\\n";
-        response << "\\r\\n";
+        response << "HTTP/1.1 200 OK\r\n";
+        response << "Content-Type: application/json\r\n";
+        response << "Access-Control-Allow-Origin: *\r\n";
+        response << "Content-Length: " << body.length() << "\r\n";
+        response << "\r\n";
         response << body;
         
         return response.str();
@@ -672,11 +672,11 @@ private:
             std::string body = "{\"success\":true,\"message\":\"Command executed\"}";
             
             std::ostringstream response;
-            response << "HTTP/1.1 200 OK\\r\\n";
-            response << "Content-Type: application/json\\r\\n";
-            response << "Access-Control-Allow-Origin: *\\r\\n";
-            response << "Content-Length: " << body.length() << "\\r\\n";
-            response << "\\r\\n";
+            response << "HTTP/1.1 200 OK\r\n";
+            response << "Content-Type: application/json\r\n";
+            response << "Access-Control-Allow-Origin: *\r\n";
+            response << "Content-Length: " << body.length() << "\r\n";
+            response << "\r\n";
             response << body;
             
             return response.str();
@@ -687,11 +687,11 @@ private:
             std::string body = "{\"success\":false,\"message\":\"" + std::string(e.what()) + "\"}";
             
             std::ostringstream response;
-            response << "HTTP/1.1 500 Internal Server Error\\r\\n";
-            response << "Content-Type: application/json\\r\\n";
-            response << "Access-Control-Allow-Origin: *\\r\\n";
-            response << "Content-Length: " << body.length() << "\\r\\n";
-            response << "\\r\\n";
+            response << "HTTP/1.1 500 Internal Server Error\r\n";
+            response << "Content-Type: application/json\r\n";
+            response << "Access-Control-Allow-Origin: *\r\n";
+            response << "Content-Length: " << body.length() << "\r\n";
+            response << "\r\n";
             response << body;
             
             return response.str();

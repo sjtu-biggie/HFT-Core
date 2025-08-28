@@ -60,8 +60,8 @@ bool MarketDataHandler::initialize() {
         control_subscriber_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
         int rcvhwm = 100;
         control_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
-        control_subscriber_->connect("tcp://localhost:5561");
-        logger_.info("Connected to control endpoint: tcp://localhost:5561");
+        control_subscriber_->connect("tcp://localhost:5570");
+        logger_.info("Connected to control endpoint: tcp://localhost:5570");
         
         // Initialize DPDK if enabled
         if (StaticConfig::get_enable_dpdk()) {
@@ -270,7 +270,8 @@ void MarketDataHandler::generate_mock_data() {
     
     // Common symbols for testing
     static const std::vector<std::string> symbols = {
-        "AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX"
+        "AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX",
+        "SPY", "QQQ", "IWM", "GLD", "TLT", "VIX", "TQQQ", "SQQQ"
     };
     
     static std::uniform_int_distribution<> symbol_dist(0, symbols.size() - 1);

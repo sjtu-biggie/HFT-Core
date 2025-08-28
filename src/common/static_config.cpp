@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <vector>
 
 namespace hft {
 
@@ -9,12 +10,36 @@ namespace hft {
 StaticConfig::RuntimeOverrides StaticConfig::runtime = {};
 
 bool StaticConfig::load_from_file(const char* filename) {
-    std::ifstream file(filename);
+    // Try multiple possible paths to make it always succeed
+    std::vector<std::string> paths_to_try = {
+        filename,                           // Original path (e.g., "config/hft_config.conf")
+        std::string("../") + filename,      // From build directory (e.g., "../config/hft_config.conf") 
+        std::string("../../") + filename,   // From nested build dirs
+        "/home/gyang197/project/hft/config/hft_config.conf"  // Absolute fallback
+    };
+    
+    std::ifstream file;
+    std::string successful_path;
+    
+    for (const auto& path : paths_to_try) {
+        file.open(path);
+        if (file.is_open()) {
+            successful_path = path;
+            break;
+        }
+        file.clear(); // Clear any error flags before trying next path
+    }
+    
     if (!file.is_open()) {
-        std::cerr << "[StaticConfig] Warning: Could not open config file: " << filename << std::endl;
+        std::cerr << "[StaticConfig] Warning: Could not open config file at any of these paths:" << std::endl;
+        for (const auto& path : paths_to_try) {
+            std::cerr << "[StaticConfig]   - " << path << std::endl;
+        }
         std::cerr << "[StaticConfig] Using compile-time defaults" << std::endl;
         return false;
     }
+    
+    std::cout << "[StaticConfig] Found config file at: " << successful_path << std::endl;
     
     std::string line;
     int line_number = 0;
