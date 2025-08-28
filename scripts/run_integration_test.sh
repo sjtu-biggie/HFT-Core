@@ -37,7 +37,7 @@ print_service() {
 # Global variables
 SERVICE_PIDS=()
 PID_FILE="/tmp/hft_integration_test.pids"
-TEST_DURATION=20
+TEST_DURATION=3000
 MOCK_DURATION=30  # Run mock data a bit longer than the test
 MOCK_FREQUENCY=100
 SERVICES_MODE="core"  # core or all

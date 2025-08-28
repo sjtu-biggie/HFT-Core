@@ -180,7 +180,7 @@ public:
         logger_.info("WebSocket bridge stopped");
     }
     
-    bool is_running() const {
+bool is_running() const {
         return running_;
     }
 

@@ -1,6 +1,10 @@
 #include "market_data_handler.h"
+
+#include "../common/static_config.h"
 #include "../common/hft_metrics.h"
+#include "../common/metrics_collector.h"
 #include "../common/metrics_publisher.h"
+
 #include <chrono>
 #include <random>
 #include <iostream>
@@ -23,6 +27,9 @@ MarketDataHandler::~MarketDataHandler() {
 bool MarketDataHandler::initialize() {
     logger_.info("Initializing Market Data Handler");
     
+    MetricsCollector::instance().initialize();
+    StaticConfig::load_from_file("config/hft_config.conf");
+
     // Initialize metrics publisher
     if (!metrics_publisher_.initialize()) {
         logger_.error("Failed to initialize metrics publisher");
@@ -120,10 +127,7 @@ void MarketDataHandler::process_market_data() {
     while (running_.load()) {
         if (StaticConfig::get_enable_dpdk()) {
             // Process DPDK packets if available
-            if (!process_dpdk_packets()) {
-                // Fall back to mock data if no packets
-                generate_mock_data();
-            }
+            process_dpdk_packets();
         } else {
             // Use mock data for testing
             generate_mock_data();
@@ -162,6 +166,8 @@ bool MarketDataHandler::initialize_dpdk() {
 }
 
 bool MarketDataHandler::process_dpdk_packets() {
+    HFT_RDTSC_TIMER(hft::metrics::MD_TOTAL_LATENCY);
+    
     // This is a proof-of-concept placeholder for DPDK packet processing
     // In a real implementation, this would:
     // 1. Poll network interface for new packets
@@ -228,7 +234,6 @@ void MarketDataHandler::publish_market_data(const MarketData& data) {
         std::memcpy(message.data(), &data, sizeof(MarketData));
         
         {
-            HFT_RDTSC_TIMER(hft::metrics::MD_QUEUE_LATENCY);
             publisher_->send(message, zmq::send_flags::dontwait);
         }
         
@@ -246,6 +251,8 @@ void MarketDataHandler::publish_market_data(const MarketData& data) {
         }
     }
 }
+
+
 
 void MarketDataHandler::log_statistics() {
     uint64_t msg_count = messages_processed_.load();

@@ -118,7 +118,6 @@ void MetricsAggregator::initialize_default_metrics() {
     init_metric(hft::metrics::PARSE_LATENCY, MetricType::LATENCY);
     init_metric(hft::metrics::PUBLISH_LATENCY, MetricType::LATENCY);
     init_metric(hft::metrics::PROCESS_LATENCY, MetricType::LATENCY);
-    init_metric(hft::metrics::VALIDATE_LATENCY, MetricType::LATENCY);
     init_metric(hft::metrics::RISK_CHECK_LATENCY, MetricType::LATENCY);
     init_metric(hft::metrics::SUBMIT_LATENCY, MetricType::LATENCY);
     init_metric(hft::metrics::TICK_TO_SIGNAL, MetricType::LATENCY);
@@ -142,11 +141,7 @@ void MetricsAggregator::initialize_default_metrics() {
     // System Metrics with updated metric names (no prefixes)
     init_metric(hft::metrics::MEMORY_RSS_MB, MetricType::GAUGE);
     init_metric(hft::metrics::CPU_USAGE_PERCENT, MetricType::GAUGE);
-    init_metric(hft::metrics::THREAD_COUNT_CURRENT, MetricType::GAUGE, 1);
-    
-    // Network Metrics with updated metric names (no prefixes)
-    init_metric(hft::metrics::NETWORK_BYTES_RECV_TOTAL, MetricType::GAUGE);
-    init_metric(hft::metrics::NETWORK_BYTES_SENT_TOTAL, MetricType::GAUGE);
+    init_metric(hft::metrics::THREAD_COUNT, MetricType::GAUGE, 1);
     
     std::cout << "[MetricsAggregator] Initialized " << default_metrics_.size() << " default metrics" << std::endl;
 }
@@ -178,19 +173,15 @@ void MetricsAggregator::cleanup_loop() {
         uint64_t now_ns = HighResTimer::get_nanoseconds();
         
         // Limit scope of mutex lock - don't hold it during sleep!
-        std::cout << "[MetricsAggregator] cleanup_loop() - trying to acquire mutex..." << std::endl;
         {
             std::lock_guard<std::mutex> lock(metrics_mutex_);
-            std::cout << "[MetricsAggregator] cleanup_loop() - mutex acquired, checking services..." << std::endl;
             for (auto& [service_name, service_metrics] : service_metrics_) {
                 if (service_metrics.is_online && 
                     (now_ns - service_metrics.last_update_ns) > SERVICE_TIMEOUT_NS) {
                     mark_service_offline(service_name);
                 }
             }
-            std::cout << "[MetricsAggregator] cleanup_loop() - releasing mutex..." << std::endl;
         }
-        std::cout << "[MetricsAggregator] cleanup_loop() - mutex released, sleeping..." << std::endl;
         
         // Sleep OUTSIDE the mutex lock
         std::this_thread::sleep_for(std::chrono::seconds(2));

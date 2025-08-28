@@ -100,15 +100,15 @@ scrape_configs:
           tier: 'core'
           component: 'risk_management'
 
-  # Control API - System control metrics (separate port)
-  - job_name: 'hft-control-api'
-    scrape_interval: 5s
-    scrape_timeout: 2s
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - 'localhost:8081'  # Control API runs on different port
-        labels:
-          service: 'control_api'
-          tier: 'infrastructure'
-          component: 'system_control'
+  # # Control API - System control metrics (separate port)
+  # - job_name: 'hft-control-api'
+  #   scrape_interval: 5s
+  #   scrape_timeout: 2s
+  #   metrics_path: /metrics
+  #   static_configs:
+  #     - targets:
+  #         - 'localhost:8081'  # Control API runs on different port
+  #       labels:
+  #         service: 'control_api'
+  #         tier: 'infrastructure'
+  #         component: 'system_control'

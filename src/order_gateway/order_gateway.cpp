@@ -1,7 +1,10 @@
 #include "order_gateway.h"
+
 #include "../common/static_config.h"
-#include "../common/hft_metrics.h"
+#include "../common/metrics_collector.h"
 #include "../common/metrics_publisher.h"
+#include "../common/hft_metrics.h"
+
 #include <random>
 #include <chrono>
 
@@ -20,6 +23,9 @@ OrderGateway::~OrderGateway() {
 bool OrderGateway::initialize() {
     logger_.info("Initializing Order Gateway");
     
+    MetricsCollector::instance().initialize();
+    StaticConfig::load_from_file("config/hft_config.conf");
+
     // Initialize metrics publisher
     if (!metrics_publisher_.initialize()) {
         logger_.error("Failed to initialize metrics publisher");
@@ -156,7 +162,7 @@ void OrderGateway::process_signals() {
 }
 
 void OrderGateway::handle_trading_signal(const TradingSignal& signal) {
-    HFT_RDTSC_TIMER(hft::metrics::TOTAL_LATENCY);
+    HFT_RDTSC_TIMER(hft::metrics::ORDER_PROCESS_LATENCY);
     
     // Create new order
     uint64_t order_id = next_order_id_++;
@@ -191,7 +197,6 @@ void OrderGateway::simulate_order_fill(const Order& order) {
     
     // Validate order first
     {
-        HFT_RDTSC_TIMER(hft::metrics::VALIDATE_LATENCY);
         if (order.quantity == 0 || order.symbol.empty()) {
             orders_rejected_++;
             HFT_COMPONENT_COUNTER(hft::metrics::ORDERS_REJECTED_TOTAL);
@@ -208,13 +213,10 @@ void OrderGateway::simulate_order_fill(const Order& order) {
     
     // Simulate fill delay
     std::uniform_int_distribution<> delay_dist(10, 100); // 10-100ms
-    auto fill_start = std::chrono::steady_clock::now();
+    // auto fill_start = std::chrono::steady_clock::now();
     std::this_thread::sleep_for(std::chrono::milliseconds(delay_dist(gen)));
     
-    // Record fill latency
-    auto fill_end = std::chrono::steady_clock::now();
-    auto fill_latency_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(fill_end - fill_start).count();
-    HFT_LATENCY_NS(hft::metrics::FILL_LATENCY, fill_latency_ns);
+    // auto fill_end = std::chrono::steady_clock::now();
     
     // Simulate fill price with some slippage
     double fill_price = order.price;

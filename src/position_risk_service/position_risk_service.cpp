@@ -1,5 +1,7 @@
 #include "position_risk_service.h"
 #include "../common/static_config.h"
+#include "../common/metrics_collector.h"
+#include "../common/metrics_publisher.h"
 #include "../common/hft_metrics.h"
 #include <iostream>
 
@@ -19,6 +21,9 @@ PositionRiskService::~PositionRiskService() {
 bool PositionRiskService::initialize() {
     logger_.info("Initializing Position & Risk Service");
     
+    MetricsCollector::instance().initialize();
+    StaticConfig::load_from_file("config/hft_config.conf");
+
     // Initialize metrics publisher
     if (!metrics_publisher_.initialize()) {
         logger_.error("Failed to initialize metrics publisher");
