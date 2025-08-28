@@ -4,6 +4,7 @@
 #include "../common/logging.h"
 #include "../common/static_config.h"
 #include "../common/hft_metrics.h"
+#include "../common/metrics_publisher.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -62,6 +63,7 @@ private:
     
     // HFT Metrics tracking
     ComponentThroughput throughput_tracker_;
+    MetricsPublisher metrics_publisher_;
 };
 
 } // namespace hft

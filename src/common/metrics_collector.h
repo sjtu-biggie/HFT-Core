@@ -131,6 +131,12 @@ struct MetricStats {
     
 private:
     void calculate_percentiles();
+    
+    friend std::ostream& operator<<(std::ostream& os, const MetricStats& stats) {
+        os << stats.name << ": count=" << stats.count << " mean=" << stats.mean 
+           << " p50=" << stats.p50 << " p95=" << stats.p95 << " p99=" << stats.p99;
+        return os;
+    }
 };
 
 // Main metrics collection system

@@ -225,9 +225,22 @@ public:
     ~RDTSCTimer() {
         uint64_t end_ticks = __builtin_ia32_rdtsc();
         uint64_t elapsed_ticks = end_ticks - start_ticks_;
-        // Convert TSC to nanoseconds (approximate - would need calibration in production)
-        uint64_t elapsed_ns = elapsed_ticks * 1000000000ULL / 3000000000ULL; // Assuming 3GHz CPU
-        MetricsCollector::instance().record_latency(label_, elapsed_ns);
+        
+        // Bounds checking to prevent overflow and invalid values
+        if (elapsed_ticks > 0 && elapsed_ticks < UINT64_MAX / 1000) {
+            // Convert TSC to nanoseconds with safer arithmetic
+            // Use conservative 2.5GHz base frequency to avoid division by zero
+            // and handle various CPU speeds more safely
+            uint64_t elapsed_ns = (elapsed_ticks * 1000) / 2500; // ~2.5GHz assumption
+            
+            // Sanity check: if result seems unreasonable (>1 second), cap it
+            if (elapsed_ns > 1000000000ULL) {
+                elapsed_ns = 1000000000ULL; // Cap at 1 second
+            }
+            
+            MetricsCollector::instance().record_latency(label_, elapsed_ns);
+        }
+        // If elapsed_ticks is invalid, we simply don't record the metric
     }
 };
 

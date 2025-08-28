@@ -2,6 +2,7 @@
 #include "../common/logging.h"
 #include "../common/static_config.h"
 #include "../common/prometheus_exporter.h"
+#include "../common/metrics_aggregator.h"
 #include <zmq.hpp>
 #include <thread>
 #include <chrono>
@@ -33,7 +34,8 @@ public:
         , context_(1)
         , zmq_subscriber_(context_, ZMQ_SUB)
         , server_socket_(-1)
-        , port_(8080) {
+        , port_(8080)
+        , metrics_aggregator_("tcp://localhost:5560") {
         
         // Subscribe to all messages
         zmq_subscriber_.setsockopt(ZMQ_SUBSCRIBE, "", 0);
@@ -46,6 +48,12 @@ public:
     
     bool initialize() {
         try {
+            // Initialize metrics aggregator
+            if (!metrics_aggregator_.initialize()) {
+                logger_.error("Failed to initialize metrics aggregator");
+                return false;
+            }
+            
             // Connect to ZMQ message bus
             std::string zmq_endpoint = StaticConfig::get_market_data_endpoint();
             zmq_subscriber_.connect(zmq_endpoint);
@@ -122,6 +130,9 @@ public:
     void start() {
         running_ = true;
         
+        // Start metrics aggregator
+        metrics_aggregator_.start();
+        
         // Start worker threads for client handling
         for (size_t i = 0; i < MAX_WORKER_THREADS; ++i) {
             worker_threads_.emplace_back(&WebSocketBridge::worker_thread, this);
@@ -138,6 +149,9 @@ public:
     
     void stop() {
         running_ = false;
+        
+        // Stop metrics aggregator
+        metrics_aggregator_.stop();
         
         // Notify all worker threads to shutdown
         client_queue_cv_.notify_all();
@@ -177,6 +191,7 @@ private:
     zmq::socket_t zmq_subscriber_;
     int server_socket_;
     int port_;
+    MetricsAggregator metrics_aggregator_;
     
     std::unique_ptr<std::thread> zmq_thread_;
     std::unique_ptr<std::thread> server_thread_;
@@ -188,7 +203,7 @@ private:
     
     // Thread pool for client handling
     static constexpr size_t MAX_WORKER_THREADS = 2;
-    static constexpr size_t MAX_PENDING_CONNECTIONS = 10;
+    static constexpr size_t MAX_PENDING_CONNECTIONS = 100;
     std::vector<std::thread> worker_threads_;
     std::queue<int> pending_clients_;
     std::mutex client_queue_mutex_;
@@ -294,11 +309,13 @@ private:
     }
     
     void handle_client(int client_socket) {
-        // Set client socket timeout for security
+        // Set client socket timeouts for both send and receive
         struct timeval timeout;
         timeout.tv_sec = 5;  // 5 second timeout
         timeout.tv_usec = 0;
         setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        setsockopt(client_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+        
         char buffer[1024] = {0};
         ssize_t bytes_read = read(client_socket, buffer, sizeof(buffer) - 1);
         
@@ -312,25 +329,55 @@ private:
             logger_.info("Received HTTP request for path: " + path);
             
             std::string response;
-            if (path == "/metrics") {
-                // Prometheus metrics endpoint
-                logger_.info("Building metrics response");
-                response = build_metrics_response();
-                logger_.info("Metrics response size: " + std::to_string(response.length()));
-            } else {
-                // Default: return current messages
-                logger_.info("Building default HTTP response");
-                response = build_http_response();
+            try {
+                if (path == "/metrics") {
+                    // Prometheus metrics endpoint
+                    logger_.info("Building metrics response");
+                    response = build_metrics_response();
+                    logger_.info("Metrics response size: " + std::to_string(response.length()));
+                } else {
+                    // Default: return current messages
+                    logger_.info("Building default HTTP response");
+                    response = build_http_response();
+                }
+                
+                if (!response.empty()) {
+                    // Send response in chunks to handle large responses
+                    const char* data = response.c_str();
+                    size_t total_size = response.length();
+                    size_t sent_total = 0;
+                    
+                    while (sent_total < total_size) {
+                        ssize_t sent = send(client_socket, data + sent_total, 
+                                          total_size - sent_total, MSG_NOSIGNAL);
+                        if (sent <= 0) {
+                            logger_.warning("Failed to send data to client, sent: " + 
+                                          std::to_string(sent_total) + "/" + std::to_string(total_size));
+                            break;
+                        }
+                        sent_total += sent;
+                    }
+                    
+                    if (sent_total == total_size) {
+                        logger_.info("Successfully sent " + std::to_string(sent_total) + " bytes to client");
+                    }
+                } else {
+                    logger_.warning("Generated empty response for path: " + path);
+                    // Send a simple error response
+                    std::string error_response = "HTTP/1.1 500 Internal Server Error\r\n"
+                                               "Content-Length: 0\r\n\r\n";
+                    send(client_socket, error_response.c_str(), error_response.length(), MSG_NOSIGNAL);
+                }
+                
+            } catch (const std::exception& e) {
+                logger_.error("Exception in handle_client: " + std::string(e.what()));
+                std::string error_response = "HTTP/1.1 500 Internal Server Error\r\n"
+                                           "Content-Length: 0\r\n\r\n";
+                send(client_socket, error_response.c_str(), error_response.length(), MSG_NOSIGNAL);
             }
             
-            if (!response.empty()) {
-                ssize_t sent = send(client_socket, response.c_str(), response.length(), 0);
-                logger_.info("Sent " + std::to_string(sent) + " bytes to client");
-            } else {
-                logger_.warning("Generated empty response for path: " + path);
-            }
         } else {
-            logger_.warning("No bytes read from client socket");
+            logger_.warning("No bytes read from client socket, errno: " + std::to_string(errno));
         }
     }
     
@@ -342,17 +389,40 @@ private:
     }
     
     std::string build_metrics_response() {
-        std::string metrics_data = PrometheusExporter::export_metrics();
-        
-        std::ostringstream response;
-        response << "HTTP/1.1 200 OK\r\n";
-        response << "Content-Type: " << PrometheusExporter::get_content_type() << "\r\n";
-        response << "Access-Control-Allow-Origin: *\r\n";
-        response << "Content-Length: " << metrics_data.length() << "\r\n";
-        response << "\r\n";
-        response << metrics_data;
-        
-        return response.str();
+        try {
+            // Get aggregated metrics from all services
+            logger_.info("Getting aggregated metrics...");
+            auto aggregated_metrics = metrics_aggregator_.get_all_metrics();
+            logger_.info("Got " + std::to_string(aggregated_metrics.size()) + " metrics, exporting...");
+            
+            std::string metrics_data = PrometheusExporter::export_metrics(&aggregated_metrics);
+            logger_.info("Exported metrics data, size: " + std::to_string(metrics_data.length()));
+            
+            std::ostringstream response;
+            response << "HTTP/1.1 200 OK\r\n";
+            response << "Content-Type: " << PrometheusExporter::get_content_type() << "\r\n";
+            response << "Access-Control-Allow-Origin: *\r\n";
+            response << "Content-Length: " << metrics_data.length() << "\r\n";
+            response << "\r\n";
+            response << metrics_data;
+            
+            return response.str();
+            
+        } catch (const std::exception& e) {
+            logger_.error("Exception in build_metrics_response: " + std::string(e.what()));
+            
+            // Return a minimal valid response
+            std::string error_data = "# Error generating metrics\n";
+            std::ostringstream response;
+            response << "HTTP/1.1 200 OK\r\n";
+            response << "Content-Type: text/plain\r\n";
+            response << "Access-Control-Allow-Origin: *\r\n";
+            response << "Content-Length: " << error_data.length() << "\r\n";
+            response << "\r\n";
+            response << error_data;
+            
+            return response.str();
+        }
     }
     
     std::string build_http_response() {

@@ -75,6 +75,8 @@ add_library(hft_common STATIC
     src/common/high_res_timer.cpp
     src/common/metrics_collector.cpp
     src/common/hft_metrics.cpp
+    src/common/metrics_publisher.cpp
+    src/common/metrics_aggregator.cpp
     src/common/order_book.cpp
     src/common/simple_transport_demo.cpp
     src/common/cpu_affinity.cpp

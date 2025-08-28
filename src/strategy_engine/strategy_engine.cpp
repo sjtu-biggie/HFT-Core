@@ -2,6 +2,7 @@
 #include "../common/static_config.h"
 #include "../common/metrics_collector.h"
 #include "../common/high_res_timer.h"
+#include "../common/metrics_publisher.h"
 #include <chrono>
 #include <iostream>
 
@@ -69,7 +70,8 @@ StrategyEngine::StrategyEngine()
     : running_(false)
     , market_data_processed_(0)
     , signals_generated_(0)
-    , logger_("StrategyEngine", StaticConfig::get_logger_endpoint()) {
+    , logger_("StrategyEngine", StaticConfig::get_logger_endpoint())
+    , metrics_publisher_("StrategyEngine", "tcp://*:5561") {
 }
 
 StrategyEngine::~StrategyEngine() {
@@ -83,6 +85,12 @@ bool StrategyEngine::initialize() {
     HighResTimer::initialize();
     MetricsCollector::instance().initialize();
     StaticConfig::load_from_file("config/hft_config.conf");
+    
+    // Initialize metrics publisher
+    if (!metrics_publisher_.initialize()) {
+        logger_.error("Failed to initialize metrics publisher");
+        return false;
+    }
     
     config_ = std::make_unique<Config>();
     
@@ -145,6 +153,9 @@ void StrategyEngine::start() {
     logger_.info("Starting Strategy Engine with " + std::to_string(strategies_.size()) + " strategies");
     running_.store(true);
     
+    // Start metrics publisher
+    metrics_publisher_.start();
+    
     // Start processing thread
     processing_thread_ = std::make_unique<std::thread>(&StrategyEngine::process_messages, this);
     
@@ -158,6 +169,9 @@ void StrategyEngine::stop() {
     
     logger_.info("Stopping Strategy Engine");
     running_.store(false);
+    
+    // Stop metrics publisher
+    metrics_publisher_.stop();
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();

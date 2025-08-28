@@ -2,6 +2,7 @@
 
 #include "../common/message_types.h"
 #include "../common/logging.h"
+#include "../common/metrics_publisher.h"
 #include "../common/config.h"
 #include <zmq.hpp>
 #include <memory>
@@ -114,6 +115,7 @@ private:
     void log_statistics();
     
     Logger logger_;
+    MetricsPublisher metrics_publisher_;
 };
 
 } // namespace hft

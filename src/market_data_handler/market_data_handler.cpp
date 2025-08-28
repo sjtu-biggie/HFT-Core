@@ -1,5 +1,6 @@
 #include "market_data_handler.h"
 #include "../common/hft_metrics.h"
+#include "../common/metrics_publisher.h"
 #include <chrono>
 #include <random>
 #include <iostream>
@@ -11,7 +12,8 @@ MarketDataHandler::MarketDataHandler()
     , messages_processed_(0)
     , bytes_processed_(0)
     , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) 
-    , throughput_tracker_(hft::metrics::MD_MESSAGES_RECEIVED, hft::metrics::MD_MESSAGES_PER_SEC) {
+    , throughput_tracker_(hft::metrics::MD_MESSAGES_RECEIVED, hft::metrics::MD_MESSAGES_PER_SEC)
+    , metrics_publisher_("MarketDataHandler", "tcp://*:5562") {
 }
 
 MarketDataHandler::~MarketDataHandler() {
@@ -20,6 +22,12 @@ MarketDataHandler::~MarketDataHandler() {
 
 bool MarketDataHandler::initialize() {
     logger_.info("Initializing Market Data Handler");
+    
+    // Initialize metrics publisher
+    if (!metrics_publisher_.initialize()) {
+        logger_.error("Failed to initialize metrics publisher");
+        return false;
+    }
     
     try {
         // Initialize ZeroMQ context and publisher
@@ -66,6 +74,9 @@ void MarketDataHandler::start() {
     logger_.info("Starting Market Data Handler");
     running_.store(true);
     
+    // Start metrics publisher
+    metrics_publisher_.start();
+    
     // Start processing thread
     processing_thread_ = std::make_unique<std::thread>(&MarketDataHandler::process_market_data, this);
     
@@ -79,6 +90,9 @@ void MarketDataHandler::stop() {
     
     logger_.info("Stopping Market Data Handler");
     running_.store(false);
+    
+    // Stop metrics publisher
+    metrics_publisher_.stop();
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();

@@ -20,6 +20,26 @@ The HFT system implements a comprehensive, high-performance metrics collection a
 - **RDTSC-based timing**: CPU cycle-accurate latency measurements
 - **Automatic aggregation**: Background thread collects from all thread buffers every 100ms
 
+### 2. MetricsPublisher (Inter-Process Distribution)
+
+**Location**: `src/common/metrics_publisher.cpp`
+
+**Key Features**:
+- **ZMQ-based publishing**: Each service publishes its metrics via ZMQ PUB socket
+- **Service identification**: Each service publishes with its own unique endpoint
+- **Automatic publishing**: Publishes aggregated metrics every 2 seconds
+- **Serialized format**: Compact binary format for efficient transmission
+
+### 3. MetricsAggregator (Cross-Service Collection)
+
+**Location**: `src/common/metrics_aggregator.cpp`
+
+**Key Features**:
+- **Multi-service subscription**: Connects to all service metrics publishers
+- **Service health tracking**: Monitors service availability and staleness
+- **Default metrics initialization**: Ensures all defined metrics are always available
+- **Thread-safe aggregation**: Safe concurrent access from WebSocket Bridge
+
 **Supported Metric Types**:
 ```cpp
 enum class MetricType {
@@ -39,9 +59,9 @@ enum class MetricType {
 #### A. Critical Path Latencies (nanosecond precision)
 ```cpp
 // End-to-end trading latencies
-e2e.tick_to_signal_ns     // Market data ’ trading signal
-e2e.tick_to_order_ns      // Market data ’ order submission  
-e2e.tick_to_fill_ns       // Market data ’ order fill
+e2e.tick_to_signal_ns     // Market data ï¿½ trading signal
+e2e.tick_to_order_ns      // Market data ï¿½ order submission  
+e2e.tick_to_fill_ns       // Market data ï¿½ order fill
 
 // Component-specific latencies
 md.total_latency_ns       // Market data processing
@@ -98,12 +118,13 @@ hft_trading_pnl_total_usd 1250.75
 **Location**: `src/websocket_bridge/websocket_bridge.cpp`
 
 **Endpoints**:
-- **`http://localhost:8080/metrics`**: Prometheus metrics endpoint
+- **`http://localhost:8080/metrics`**: Prometheus metrics endpoint with aggregated metrics
 - **`http://localhost:8080/`**: Real-time JSON data feed
 
 **Features**:
-- **Thread pool architecture**: 8 worker threads for client handling
-- **CORS-enabled**: Cross-origin support for web dashboards
+- **Metrics aggregation integration**: Uses MetricsAggregator for cross-service metrics
+- **Thread pool architecture**: 2 worker threads for client handling
+- **CORS-enabled**: Cross-origin support for web dashboards  
 - **Connection limiting**: Max 100 concurrent connections
 - **Automatic timeouts**: 5-second client timeout for security
 
@@ -233,8 +254,8 @@ remote_write:
 
 1. **Latency KPIs**:
    - P99 tick-to-order < 1ms (critical)
-   - P95 tick-to-order < 500¼s (warning)
-   - Strategy processing < 100¼s
+   - P95 tick-to-order < 500ï¿½s (warning)
+   - Strategy processing < 100ï¿½s
 
 2. **Throughput KPIs**:
    - Market data rate > 1000 msg/sec

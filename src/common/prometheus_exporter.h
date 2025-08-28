@@ -15,15 +15,20 @@ namespace hft {
 // Prometheus metrics exporter for HFT system
 class PrometheusExporter {
 public:
-    static std::string export_metrics() {
+    static std::string export_metrics(const std::unordered_map<std::string, MetricStats>* external_metrics = nullptr) {
         std::ostringstream prometheus_output;
         
         // Add system information
         add_system_info(prometheus_output);
         
-        // Export collected metrics (excluding those handled by HFT-specific functions)
-        auto& collector = MetricsCollector::instance();
-        auto stats = collector.get_statistics();
+        // Use external metrics if provided, otherwise fall back to local collector
+        std::unordered_map<std::string, MetricStats> stats;
+        if (external_metrics) {
+            stats = *external_metrics;
+        } else {
+            auto& collector = MetricsCollector::instance();
+            stats = collector.get_statistics();
+        }
         
         // Metrics that are handled by HFT-specific export functions to avoid duplicates
         std::set<std::string> hft_handled_metrics = {
@@ -42,7 +47,7 @@ public:
         }
         
         // Add custom HFT metrics
-        add_hft_specific_metrics(prometheus_output);
+        add_hft_specific_metrics(prometheus_output, stats);
         
         return prometheus_output.str();
     }
@@ -159,9 +164,7 @@ private:
         output << "hft_" << name << "_sum " << stats.sum << "\n";
     }
     
-    static void add_hft_specific_metrics(std::ostringstream& output) {
-        auto& collector = MetricsCollector::instance();
-        auto stats = collector.get_statistics();
+    static void add_hft_specific_metrics(std::ostringstream& output, const std::unordered_map<std::string, MetricStats>& stats) {
         
         // Export critical latency metrics with proper buckets
         add_hft_latency_metrics(output, stats);
