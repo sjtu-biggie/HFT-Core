@@ -205,9 +205,7 @@ void MetricsAggregator::process_metrics_message(const std::vector<uint8_t>& data
     
     const SerializedMetricEntry* entries = reinterpret_cast<const SerializedMetricEntry*>(data.data() + sizeof(MetricsMessage));
     
-    std::cout << "[MetricsAggregator] process_metrics_message() - trying to acquire mutex for service: " << service_name << std::endl;
     std::lock_guard<std::mutex> lock(metrics_mutex_);
-    std::cout << "[MetricsAggregator] process_metrics_message() - mutex acquired, processing " << header->metric_count << " metrics from " << service_name << std::endl;
     ServiceMetrics& service_metrics = service_metrics_[service_name];
     service_metrics.service_name = service_name;
     service_metrics.last_update_ns = header->timestamp_ns;
@@ -238,7 +236,6 @@ void MetricsAggregator::process_metrics_message(const std::vector<uint8_t>& data
         std::string service_metric_key = service_name + "." + metric_name;
         service_metrics.metrics[service_metric_key] = stats;
     }
-    std::cout << "[MetricsAggregator] process_metrics_message() - finished processing metrics from " << service_name << ", releasing mutex..." << std::endl;
 }
 
 void MetricsAggregator::mark_service_offline(const std::string& service_name) {
@@ -250,9 +247,9 @@ void MetricsAggregator::mark_service_offline(const std::string& service_name) {
 }
 
 std::unordered_map<std::string, MetricStats> MetricsAggregator::get_all_metrics() const {
-    std::cout << "[MetricsAggregator] get_all_metrics() - trying to acquire mutex..." << std::endl;
+    // std::cout << "[MetricsAggregator] get_all_metrics() - trying to acquire mutex..." << std::endl;
     std::lock_guard<std::mutex> lock(metrics_mutex_);
-    std::cout << "[MetricsAggregator] get_all_metrics() - mutex acquired, processing metrics..." << std::endl;
+    // std::cout << "[MetricsAggregator] get_all_metrics() - mutex acquired, processing metrics..." << std::endl;
     
     // Start with default metrics
     auto result = default_metrics_;
@@ -267,14 +264,14 @@ std::unordered_map<std::string, MetricStats> MetricsAggregator::get_all_metrics(
         }
     }
     
-    std::cout << "[MetricsAggregator] get_all_metrics() - returning " << result.size() << " metrics, releasing mutex..." << std::endl;
+    // std::cout << "[MetricsAggregator] get_all_metrics() - returning " << result.size() << " metrics, releasing mutex..." << std::endl;
     return result;
 }
 
 std::vector<std::string> MetricsAggregator::get_online_services() const {
-    std::cout << "[MetricsAggregator] get_online_services() - trying to acquire mutex..." << std::endl;
+    // std::cout << "[MetricsAggregator] get_online_services() - trying to acquire mutex..." << std::endl;
     std::lock_guard<std::mutex> lock(metrics_mutex_);
-    std::cout << "[MetricsAggregator] get_online_services() - mutex acquired" << std::endl;
+    // std::cout << "[MetricsAggregator] get_online_services() - mutex acquired" << std::endl;
     
     std::vector<std::string> online_services;
     for (const auto& [service_name, service_metrics] : service_metrics_) {
@@ -283,7 +280,7 @@ std::vector<std::string> MetricsAggregator::get_online_services() const {
         }
     }
     
-    std::cout << "[MetricsAggregator] get_online_services() - returning " << online_services.size() << " services, releasing mutex..." << std::endl;
+    // std::cout << "[MetricsAggregator] get_online_services() - returning " << online_services.size() << " services, releasing mutex..." << std::endl;
     return online_services;
 }
 

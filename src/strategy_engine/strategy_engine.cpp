@@ -177,10 +177,25 @@ void StrategyEngine::stop() {
         processing_thread_->join();
     }
     
-    // Close sockets
-    if (subscriber_) subscriber_->close();
-    if (execution_sub_) execution_sub_->close();
-    if (signal_pub_) signal_pub_->close();
+    // Close sockets safely
+    if (subscriber_) {
+        try {
+            subscriber_->close();
+            subscriber_.reset();
+        } catch (const zmq::error_t&) {}
+    }
+    if (execution_sub_) {
+        try {
+            execution_sub_->close();
+            execution_sub_.reset();
+        } catch (const zmq::error_t&) {}
+    }
+    if (signal_pub_) {
+        try {
+            signal_pub_->close();
+            signal_pub_.reset();
+        } catch (const zmq::error_t&) {}
+    }
     
     log_statistics();
     

@@ -400,12 +400,15 @@ private:
             parse_request(request, method, path);
             
             // Debug logging
-            logger_.info("Received HTTP request for path: " + path);
+            logger_.debug("Received HTTP request for path: " + path);
             
             std::string response;
             try {
-                // Handle POST requests for control API
-                if (method == "POST" && path == "/api/control/start") {
+                // Handle CORS preflight OPTIONS requests
+                if (method == "OPTIONS") {
+                    logger_.info("Received CORS preflight request for path: " + path);
+                    response = build_cors_preflight_response();
+                } else if (method == "POST" && path == "/api/control/start") {
                     logger_.info("Received start control command");
                     response = handle_control_command(ControlAction::START_TRADING);
                 } else if (method == "POST" && path == "/api/control/stop") {
@@ -415,7 +418,7 @@ private:
                     // Prometheus metrics endpoint - all services
                     logger_.info("Building aggregated metrics response");
                     response = build_metrics_response();
-                    logger_.info("Metrics response size: " + std::to_string(response.length()));
+                    logger_.debug("Metrics response size: " + std::to_string(response.length()));
                 } else if (path == "/metrics/market_data") {
                     // Market Data Handler specific metrics
                     logger_.info("Building market data metrics response");
@@ -466,6 +469,7 @@ private:
                     logger_.warning("Generated empty response for path: " + path);
                     // Send a simple error response
                     std::string error_response = "HTTP/1.1 500 Internal Server Error\r\n"
+                                               "Access-Control-Allow-Origin: *\r\n"
                                                "Content-Length: 0\r\n\r\n";
                     send(client_socket, error_response.c_str(), error_response.length(), MSG_NOSIGNAL);
                 }
@@ -473,6 +477,7 @@ private:
             } catch (const std::exception& e) {
                 logger_.error("Exception in handle_client: " + std::string(e.what()));
                 std::string error_response = "HTTP/1.1 500 Internal Server Error\r\n"
+                                           "Access-Control-Allow-Origin: *\r\n"
                                            "Content-Length: 0\r\n\r\n";
                 send(client_socket, error_response.c_str(), error_response.length(), MSG_NOSIGNAL);
             }
@@ -560,6 +565,19 @@ private:
             
             return response.str();
         }
+    }
+    
+    std::string build_cors_preflight_response() {
+        std::ostringstream response;
+        response << "HTTP/1.1 200 OK\r\n";
+        response << "Access-Control-Allow-Origin: *\r\n";
+        response << "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n";
+        response << "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n";
+        response << "Access-Control-Max-Age: 86400\r\n";
+        response << "Content-Length: 0\r\n";
+        response << "\r\n";
+        
+        return response.str();
     }
     
     std::string build_http_response() {

@@ -119,12 +119,22 @@ void MarketDataHandler::stop() {
         control_thread_->join();
     }
     
-    // Close ZeroMQ sockets
+    // Close ZeroMQ sockets safely
     if (publisher_) {
-        publisher_->close();
+        try {
+            publisher_->close();
+            publisher_.reset();
+        } catch (const zmq::error_t&) {
+            // Ignore close errors during shutdown
+        }
     }
     if (control_subscriber_) {
-        control_subscriber_->close();
+        try {
+            control_subscriber_->close();
+            control_subscriber_.reset();
+        } catch (const zmq::error_t&) {
+            // Ignore close errors during shutdown
+        }
     }
     
     log_statistics();
