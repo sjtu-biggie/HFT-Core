@@ -97,6 +97,13 @@ public:
         const char* executions_endpoint = EXECUTIONS_ENDPOINT;
         const char* positions_endpoint = POSITIONS_ENDPOINT;
         
+        // String storage for dynamically loaded endpoint configurations
+        std::string market_data_endpoint_storage;
+        std::string logger_endpoint_storage;
+        std::string signals_endpoint_storage;
+        std::string executions_endpoint_storage;
+        std::string positions_endpoint_storage;
+        
         bool enable_dpdk = ENABLE_DPDK;
         bool enable_io_uring = ENABLE_IO_URING;
         bool trading_enabled = TRADING_ENABLED;

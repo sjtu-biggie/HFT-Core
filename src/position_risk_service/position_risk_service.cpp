@@ -88,9 +88,24 @@ void PositionRiskService::stop() {
         processing_thread_->join();
     }
     
-    if (execution_subscriber_) execution_subscriber_->close();
-    if (market_data_subscriber_) market_data_subscriber_->close();
-    if (position_publisher_) position_publisher_->close();
+    if (execution_subscriber_) {
+        try {
+            execution_subscriber_->close();
+            execution_subscriber_.reset();
+        } catch (const zmq::error_t&) {}
+    }
+    if (market_data_subscriber_) {
+        try {
+            market_data_subscriber_->close();
+            market_data_subscriber_.reset();
+        } catch (const zmq::error_t&) {}
+    }
+    if (position_publisher_) {
+        try {
+            position_publisher_->close();
+            position_publisher_.reset();
+        } catch (const zmq::error_t&) {}
+    }
     
     log_statistics();
     logger_.info("Service stopped");

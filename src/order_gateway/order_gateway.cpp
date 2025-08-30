@@ -115,8 +115,18 @@ void OrderGateway::stop() {
         processing_thread_->join();
     }
     
-    if (signal_subscriber_) signal_subscriber_->close();
-    if (execution_publisher_) execution_publisher_->close();
+    if (signal_subscriber_) {
+        try {
+            signal_subscriber_->close();
+            signal_subscriber_.reset();
+        } catch (const zmq::error_t&) {}
+    }
+    if (execution_publisher_) {
+        try {
+            execution_publisher_->close();
+            execution_publisher_.reset();
+        } catch (const zmq::error_t&) {}
+    }
     
     log_statistics();
     logger_.info("Order Gateway stopped");
