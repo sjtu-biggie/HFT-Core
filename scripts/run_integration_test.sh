@@ -258,7 +258,6 @@ if [ "$SERVICES_MODE" == "all" ]; then
 fi
 
 # Start core trading services
-# start_service "mock_data_generator" "./mock_data_generator" "$MOCK_DURATION $MOCK_FREQUENCY"
 start_service "market_data_handler" "./market_data_handler"
 sleep 3  # Give data generator more time to establish
 

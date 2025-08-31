@@ -36,11 +36,23 @@ void MomentumStrategy::on_market_data(const MarketData& data) {
         
         if (can_signal && std::abs(price_change) > StaticConfig::get_momentum_threshold()) {
             
-            // Generate momentum signal
+            // Generate momentum signal with LIMIT orders using real prices
             SignalAction action = (price_change > 0) ? SignalAction::BUY : SignalAction::SELL;
             
+            // Calculate limit price with small buffer for execution probability
+            double limit_price = mid_price;
+            const double price_buffer = 0.001; // 0.1% buffer for execution
+            
+            if (action == SignalAction::BUY) {
+                // Buy slightly above current price for better fill probability
+                limit_price = mid_price * (1.0 + price_buffer);
+            } else {
+                // Sell slightly below current price for better fill probability  
+                limit_price = mid_price * (1.0 - price_buffer);
+            }
+            
             TradingSignal signal = MessageFactory::create_trading_signal(
-                symbol, action, OrderType::MARKET, 0.0, 100, strategy_id_, 
+                symbol, action, OrderType::LIMIT, limit_price, 100, strategy_id_, 
                 std::min(std::abs(price_change) / StaticConfig::get_momentum_threshold(), 1.0)
             );
             

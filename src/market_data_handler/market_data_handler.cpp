@@ -18,7 +18,28 @@ MarketDataHandler::MarketDataHandler()
     , bytes_processed_(0)
     , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) 
     , throughput_tracker_(hft::metrics::MD_MESSAGES_RECEIVED, hft::metrics::MD_MESSAGES_PER_SEC)
-    , metrics_publisher_("MarketDataHandler", "tcp://*:5562") {
+    , metrics_publisher_("MarketDataHandler", "tcp://*:5562")
+    , price_generator_(std::random_device{}())
+    , price_change_dist_(0.0, 0.01) // Mean 0, std dev 1% for price changes
+    , session_start_time_(std::chrono::steady_clock::now()) {
+    
+    // Initialize symbol base prices and volatilities
+    symbol_prices_["AAPL"] = 175.0; symbol_volatilities_["AAPL"] = 0.25;
+    symbol_prices_["GOOGL"] = 140.0; symbol_volatilities_["GOOGL"] = 0.28;
+    symbol_prices_["MSFT"] = 380.0; symbol_volatilities_["MSFT"] = 0.22;
+    symbol_prices_["TSLA"] = 250.0; symbol_volatilities_["TSLA"] = 0.45;
+    symbol_prices_["AMZN"] = 145.0; symbol_volatilities_["AMZN"] = 0.30;
+    symbol_prices_["NVDA"] = 900.0; symbol_volatilities_["NVDA"] = 0.35;
+    symbol_prices_["META"] = 350.0; symbol_volatilities_["META"] = 0.32;
+    symbol_prices_["NFLX"] = 450.0; symbol_volatilities_["NFLX"] = 0.38;
+    symbol_prices_["SPY"] = 450.0; symbol_volatilities_["SPY"] = 0.15;
+    symbol_prices_["QQQ"] = 380.0; symbol_volatilities_["QQQ"] = 0.20;
+    symbol_prices_["IWM"] = 200.0; symbol_volatilities_["IWM"] = 0.25;
+    symbol_prices_["GLD"] = 180.0; symbol_volatilities_["GLD"] = 0.18;
+    symbol_prices_["TLT"] = 95.0; symbol_volatilities_["TLT"] = 0.12;
+    symbol_prices_["VIX"] = 18.0; symbol_volatilities_["VIX"] = 0.80;
+    symbol_prices_["TQQQ"] = 45.0; symbol_volatilities_["TQQQ"] = 0.60;
+    symbol_prices_["SQQQ"] = 12.0; symbol_volatilities_["SQQQ"] = 0.60;
 }
 
 MarketDataHandler::~MarketDataHandler() {
@@ -63,8 +84,14 @@ bool MarketDataHandler::initialize() {
         control_subscriber_->connect("tcp://localhost:5570");
         logger_.info("Connected to control endpoint: tcp://localhost:5570");
         
-        // Initialize DPDK if enabled
-        if (StaticConfig::get_enable_dpdk()) {
+        // Initialize data sources based on configuration
+        std::string data_source = StaticConfig::get_market_data_source();
+        
+        if (data_source == "pcap") {
+            if (!initialize_pcap_reader()) {
+                logger_.warning("PCAP initialization failed, falling back to mock data");
+            }
+        } else if (StaticConfig::get_enable_dpdk()) {
             if (!initialize_dpdk()) {
                 logger_.warning("DPDK initialization failed, using mock data");
             }
@@ -158,12 +185,22 @@ void MarketDataHandler::process_market_data() {
             continue;
         }
         
-        if (StaticConfig::get_enable_dpdk()) {
-            // Process DPDK packets if available
+        // Check data source configuration
+        std::string data_source = StaticConfig::get_market_data_source();
+        
+        if (data_source == "pcap") {
+            // PCAP file replay mode
+            process_pcap_data();
+        } else if (data_source == "alpaca") {
+            // Alpaca API mode (to be implemented)
+            logger_.warning("Alpaca data source not yet implemented, falling back to mock data");
+            generate_realistic_mock_data();
+        } else if (StaticConfig::get_enable_dpdk()) {
+            // DPDK mode
             process_dpdk_packets();
         } else {
-            // Use mock data for testing
-            generate_mock_data();
+            // Default to enhanced realistic mock data
+            generate_realistic_mock_data();
         }
         
         // Log statistics periodically
@@ -344,6 +381,188 @@ void MarketDataHandler::publish_market_data(const MarketData& data) {
 }
 
 
+
+void MarketDataHandler::generate_realistic_mock_data() {
+    HFT_RDTSC_TIMER(hft::metrics::MD_TOTAL_LATENCY);
+    
+    // Select symbol in round-robin fashion for better distribution
+    static const std::vector<std::string> symbols = {
+        "AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX",
+        "SPY", "QQQ", "IWM", "GLD", "TLT", "VIX", "TQQQ", "SQQQ"
+    };
+    static size_t symbol_index = 0;
+    std::string symbol = symbols[symbol_index];
+    symbol_index = (symbol_index + 1) % symbols.size();
+    
+    // Get current price and volatility for symbol
+    double current_price = symbol_prices_[symbol];
+    double volatility = symbol_volatilities_[symbol];
+    
+    // Apply market session volatility multiplier
+    double session_vol_multiplier = get_market_session_volatility();
+    double effective_volatility = volatility * session_vol_multiplier;
+    
+    // Generate realistic price change using Geometric Brownian Motion
+    // dS = μ * S * dt + σ * S * dW, where dW is normally distributed
+    const double dt = 0.001; // Small time step (1ms)
+    const double drift = 0.0; // No long-term trend for mock data
+    
+    double price_change = drift * current_price * dt + 
+                         effective_volatility * current_price * price_change_dist_(price_generator_) * std::sqrt(dt);
+    
+    // Update symbol price with bounds checking
+    double new_price = current_price + price_change;
+    double min_price = get_symbol_base_price(symbol) * 0.5; // Don't go below 50% of base
+    double max_price = get_symbol_base_price(symbol) * 2.0; // Don't go above 200% of base
+    
+    new_price = std::max(min_price, std::min(max_price, new_price));
+    symbol_prices_[symbol] = new_price;
+    
+    // Generate realistic bid/ask spread based on price and volatility
+    double spread_bp = 5.0 + (effective_volatility * 100.0); // 5-50 basis points
+    double spread = new_price * (spread_bp / 10000.0);
+    
+    double bid_price = new_price - spread / 2.0;
+    double ask_price = new_price + spread / 2.0;
+    
+    // Generate volume based on volatility (higher vol = higher volume)
+    std::uniform_int_distribution<uint32_t> volume_dist(
+        static_cast<uint32_t>(1000 * (1.0 - effective_volatility)),
+        static_cast<uint32_t>(5000 * (1.0 + effective_volatility))
+    );
+    uint32_t bid_size = volume_dist(price_generator_);
+    uint32_t ask_size = volume_dist(price_generator_);
+    
+    // Generate last trade within spread
+    std::uniform_real_distribution<double> trade_price_dist(0.2, 0.8);
+    double last_price = bid_price + (ask_price - bid_price) * trade_price_dist(price_generator_);
+    uint32_t last_size = std::uniform_int_distribution<uint32_t>(100, 1000)(price_generator_);
+    
+    // Create market data message
+    MarketData data = MessageFactory::create_market_data(
+        symbol, bid_price, ask_price, bid_size, ask_size, last_price, last_size
+    );
+    
+    // Track metrics
+    HFT_COMPONENT_COUNTER(hft::metrics::MD_MESSAGES_PROCESSED);
+    throughput_tracker_.increment();
+    
+    publish_market_data(data);
+}
+
+double MarketDataHandler::get_market_session_volatility() const {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(now - session_start_time_).count();
+    
+    // Simulate market hours volatility patterns
+    // Higher volatility at market open/close, lower during lunch
+    double hour_of_day = (elapsed / 60.0) + 9.5; // Start at 9:30 AM EST
+    hour_of_day = std::fmod(hour_of_day, 24.0); // Wrap around day
+    
+    if (hour_of_day < 9.5 || hour_of_day > 16.0) {
+        // Pre/post market - lower volume, higher volatility
+        return 1.2;
+    } else if (hour_of_day < 10.5 || hour_of_day > 15.0) {
+        // Market open/close - high volatility
+        return 1.5;
+    } else if (hour_of_day > 12.0 && hour_of_day < 14.0) {
+        // Lunch time - lower volatility
+        return 0.7;
+    } else {
+        // Regular trading hours
+        return 1.0;
+    }
+}
+
+double MarketDataHandler::get_symbol_base_price(const std::string& symbol) const {
+    auto it = symbol_prices_.find(symbol);
+    if (it != symbol_prices_.end()) {
+        return it->second;
+    }
+    return 100.0; // Default fallback price
+}
+
+bool MarketDataHandler::initialize_pcap_reader() {
+    logger_.info("Initializing PCAP reader for market data");
+    
+    // Get PCAP file path from configuration
+    std::string pcap_file = StaticConfig::get_pcap_file_path();
+    std::string format_str = StaticConfig::get_pcap_format();
+    bool use_dpdk = StaticConfig::get_enable_dpdk();
+    
+    // Convert format string to enum
+    FeedFormat format = FeedFormat::GENERIC_CSV;
+    if (format_str == "nasdaq_itch") {
+        format = FeedFormat::NASDAQ_ITCH_5_0;
+    } else if (format_str == "nyse_pillar") {
+        format = FeedFormat::NYSE_PILLAR;
+    } else if (format_str == "iex_tops") {
+        format = FeedFormat::IEX_TOPS;
+    } else if (format_str == "fix") {
+        format = FeedFormat::FIX_PROTOCOL;
+    }
+    
+    // Create PCAP reader
+    pcap_reader_ = std::make_unique<PCAPReader>(pcap_file, format);
+    
+    if (!pcap_reader_->initialize(use_dpdk)) {
+        logger_.error("Failed to initialize PCAP reader");
+        pcap_reader_.reset();
+        return false;
+    }
+    
+    // Set up callback to publish market data
+    pcap_reader_->set_data_callback([this](const MarketData& data) {
+        // Update internal price tracking for realistic continuity
+        std::string symbol(data.symbol);
+        double mid_price = (data.bid_price + data.ask_price) / 2.0;
+        symbol_prices_[symbol] = mid_price;
+        
+        // Publish the market data
+        publish_market_data(data);
+        
+        // Update metrics
+        HFT_COMPONENT_COUNTER(hft::metrics::MD_MESSAGES_PROCESSED);
+        throughput_tracker_.increment();
+    });
+    
+    // Configure replay parameters
+    double replay_speed = StaticConfig::get_replay_speed();
+    bool loop_replay = StaticConfig::get_loop_replay();
+    
+    pcap_reader_->set_replay_speed(replay_speed);
+    pcap_reader_->set_loop_replay(loop_replay);
+    
+    logger_.info("PCAP reader initialized successfully");
+    return true;
+}
+
+void MarketDataHandler::process_pcap_data() {
+    if (!pcap_reader_) {
+        logger_.error("PCAP reader not initialized");
+        return;
+    }
+    
+    logger_.info("Starting PCAP data processing");
+    pcap_reader_->start_reading();
+    
+    // Monitor PCAP reader status
+    while (running_.load() && pcap_reader_->is_reading()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // Log statistics periodically
+        static auto last_stats_log = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_stats_log).count() >= 10) {
+            logger_.info("PCAP Stats - Processed: " + std::to_string(pcap_reader_->get_packets_processed()) +
+                        ", Parsed: " + std::to_string(pcap_reader_->get_packets_parsed()) +
+                        ", Errors: " + std::to_string(pcap_reader_->get_parse_errors()));
+            last_stats_log = now;
+        }
+    }
+    
+    logger_.info("PCAP data processing completed");
+}
 
 void MarketDataHandler::log_statistics() {
     uint64_t msg_count = messages_processed_.load();

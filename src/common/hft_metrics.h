@@ -70,8 +70,6 @@ constexpr const char* MD_MESSAGES_PER_SEC = "messages_per_second";
 constexpr const char* MD_BYTES_RECEIVED = "bytes_received_total";
 
 // Signal Counters - remove prefixes, use service labels
-constexpr const char* DECISIONS_TOTAL = "decisions_total";
-constexpr const char* DECISIONS_PER_SECOND = "decisions_per_second";
 constexpr const char* BUY_SIGNALS = "buy_signals_total";
 constexpr const char* SELL_SIGNALS = "sell_signals_total";
 

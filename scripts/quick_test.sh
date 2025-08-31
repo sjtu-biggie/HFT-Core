@@ -132,7 +132,7 @@ echo
 # Test 1: Check if executables exist
 run_test "Executable Presence Check" "
     [ -f 'low_latency_logger' ] && 
-    [ -f 'mock_data_generator' ] && 
+    [ -f 'market_data_handler' ] && 
     [ -f 'strategy_engine' ] && 
     [ -f 'order_gateway' ] && 
     [ -f 'position_risk_service' ] &&
@@ -155,7 +155,7 @@ run_test "Low Latency Logger Startup" "start_quick_service 'low_latency_logger' 
 
 sleep 1
 
-run_test "Mock Data Generator Startup" "start_quick_service 'mock_data_generator' './mock_data_generator' '10 50'"
+run_test "Mock Data Generator Startup" "start_quick_service 'market_data_handler' './market_data_handler'"
 
 sleep 2
 

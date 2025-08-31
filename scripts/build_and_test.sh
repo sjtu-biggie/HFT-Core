@@ -136,7 +136,7 @@ if pkg-config --exists libzmq; then
                 print_warning "Make sure to start services first!"
                 echo "  In separate terminals run:"
                 echo "    ./low_latency_logger"
-                echo "    ./mock_data_generator 35 100"
+                echo "    ./market_data_handler"
                 echo "    ./strategy_engine"
                 echo "    ./order_gateway"
                 echo "    ./position_risk_service"
@@ -146,7 +146,7 @@ if pkg-config --exists libzmq; then
             
             # Start mock data generator in background for manual test
             print_status "Starting mock data generator..."
-            ./mock_data_generator 35 100 &
+            ./market_data_handler 35 100 &
             MOCK_PID=$!
             
             # Give it time to start
@@ -171,7 +171,7 @@ if pkg-config --exists libzmq; then
     # Show available executables
     echo
     print_status "Build artifacts created:"
-    ls -la | grep -E "(market_data_handler|strategy_engine|order_gateway|position_risk_service|low_latency_logger|mock_data_generator|integration_test|unit_tests)" || true
+    ls -la | grep -E "(market_data_handler|strategy_engine|order_gateway|position_risk_service|low_latency_logger|market_data_handler|integration_test|unit_tests)" || true
     
     echo
     print_status "Available helper scripts:"
@@ -184,7 +184,7 @@ if pkg-config --exists libzmq; then
     print_status "Manual service management:"
     echo "  1. Start services in separate terminals:"
     echo "     ./build/low_latency_logger"
-    echo "     ./build/mock_data_generator 60 100"
+    echo "     ./build/market_data_handler"
     echo "     ./build/strategy_engine" 
     echo "     ./build/order_gateway"
     echo "     ./build/position_risk_service"

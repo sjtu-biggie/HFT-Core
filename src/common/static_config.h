@@ -124,6 +124,13 @@ public:
         // Transport configuration
         const char* transport_type = DEFAULT_TRANSPORT_TYPE;
         size_t ring_buffer_size = DEFAULT_RING_BUFFER_SIZE;
+        
+        // Market data source configuration
+        std::string market_data_source = "mock";  // "mock", "pcap", "alpaca"
+        std::string pcap_file_path = "data/market_data.pcap";
+        std::string pcap_format = "generic_csv";  // "generic_csv", "nasdaq_itch", "nyse_pillar", "iex_tops", "fix"
+        double replay_speed = 1.0;
+        bool loop_replay = false;
     };
     
     // Global runtime overrides (for file-based configuration)
@@ -155,6 +162,27 @@ public:
     
     static const char* get_transport_type() { return runtime.transport_type; }
     static size_t get_ring_buffer_size() { return runtime.ring_buffer_size; }
+    
+    // Market data source configuration getters
+    static const std::string& get_market_data_source() { return runtime.market_data_source; }
+    static const std::string& get_pcap_file_path() { return runtime.pcap_file_path; }
+    static const std::string& get_pcap_format() { return runtime.pcap_format; }
+    static double get_replay_speed() { return runtime.replay_speed; }
+    static bool get_loop_replay() { return runtime.loop_replay; }
+    
+    // Generic configuration value getters (with defaults)
+    static std::string get_config_value(const std::string& key, const std::string& default_value) {
+        if (key == "market_data.source") return runtime.market_data_source;
+        if (key == "market_data.pcap_file") return runtime.pcap_file_path;
+        if (key == "market_data.pcap_format") return runtime.pcap_format;
+        if (key == "market_data.replay_speed") return std::to_string(runtime.replay_speed);
+        return default_value;
+    }
+    
+    static bool get_config_bool(const std::string& key, bool default_value) {
+        if (key == "market_data.loop_replay") return runtime.loop_replay;
+        return default_value;
+    }
     
     // Load configuration from file into runtime overrides
     static bool load_from_file(const char* filename);
