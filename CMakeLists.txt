@@ -78,7 +78,6 @@ endif()
 add_library(hft_common STATIC
     src/common/message_types.cpp
     src/common/logging.cpp
-    src/common/config.cpp
     src/common/static_config.cpp
     src/common/high_res_timer.cpp
     src/common/metrics_collector.cpp
@@ -161,9 +160,6 @@ target_link_libraries(test_message_types hft_common ${ZMQ_LIBRARY} pthread)
 
 add_executable(test_logging src/test/test_logging.cpp)
 target_link_libraries(test_logging hft_common ${ZMQ_LIBRARY} pthread)
-
-add_executable(test_config src/test/test_config.cpp)
-target_link_libraries(test_config hft_common ${ZMQ_LIBRARY} pthread)
 
 # Find Google Test for backtesting tests
 find_package(GTest QUIET)

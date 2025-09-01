@@ -104,8 +104,6 @@ bool StrategyEngine::initialize() {
         return false;
     }
     
-    config_ = std::make_unique<Config>();
-    
     try {
         // Initialize ZeroMQ context and sockets
         context_ = std::make_unique<zmq::context_t>(1);

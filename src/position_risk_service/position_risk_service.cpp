@@ -4,6 +4,8 @@
 #include "../common/metrics_publisher.h"
 #include "../common/hft_metrics.h"
 #include <iostream>
+#include <chrono>
+#include <thread>
 
 namespace hft {
 
@@ -30,7 +32,6 @@ bool PositionRiskService::initialize() {
         return false;
     }
     
-    config_ = std::make_unique<Config>();
     
     try {
         context_ = std::make_unique<zmq::context_t>(1);
@@ -43,8 +44,7 @@ bool PositionRiskService::initialize() {
         // Market data subscriber
         market_data_subscriber_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
         market_data_subscriber_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-        std::string md_endpoint = config_->get_string(GlobalConfig::MARKET_DATA_ENDPOINT);
-        market_data_subscriber_->connect(md_endpoint);
+        market_data_subscriber_->connect(StaticConfig::get_market_data_endpoint());
         
         // Position publisher
         position_publisher_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_PUB);
@@ -72,6 +72,7 @@ void PositionRiskService::start() {
     metrics_publisher_.start();
     
     processing_thread_ = std::make_unique<std::thread>(&PositionRiskService::process_messages, this);
+    metrics_thread_ = std::make_unique<std::thread>(&PositionRiskService::metrics_update_loop, this);
     logger_.info("Service started");
 }
 
@@ -86,6 +87,10 @@ void PositionRiskService::stop() {
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();
+    }
+    
+    if (metrics_thread_ && metrics_thread_->joinable()) {
+        metrics_thread_->join();
     }
     
     if (execution_subscriber_) {
@@ -261,7 +266,7 @@ bool PositionRiskService::check_risk_limits(const TradingSignal& signal) {
     return true;
 }
 
-void PositionRiskService::log_statistics() {
+void PositionRiskService::update_metrics() {
     double total_unrealized = 0.0;
     double total_realized = 0.0;
     double gross_exposure = 0.0;
@@ -290,6 +295,50 @@ void PositionRiskService::log_statistics() {
     HFT_GAUGE_VALUE(hft::metrics::PNL_TOTAL_USD, static_cast<uint64_t>(total_unrealized + total_realized));
     HFT_GAUGE_VALUE(hft::metrics::GROSS_EXPOSURE_USD, static_cast<uint64_t>(gross_exposure));
     HFT_GAUGE_VALUE(hft::metrics::NET_EXPOSURE_USD, static_cast<uint64_t>(net_exposure));
+}
+
+void PositionRiskService::metrics_update_loop() {
+    logger_.info("Metrics update loop started");
+    
+    while (running_.load()) {
+        try {
+            update_metrics();
+            
+            // Update metrics every 5 seconds
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            
+        } catch (const std::exception& e) {
+            logger_.error("Metrics update error: " + std::string(e.what()));
+        }
+    }
+    
+    logger_.info("Metrics update loop stopped");
+}
+
+void PositionRiskService::log_statistics() {
+    double total_unrealized = 0.0;
+    double total_realized = 0.0;
+    double gross_exposure = 0.0;
+    double net_exposure = 0.0;
+    
+    for (const auto& [symbol, position] : positions_) {
+        total_unrealized += position.unrealized_pnl;
+        total_realized += position.realized_pnl;
+        
+        // Calculate exposure (using current prices if available)
+        double market_value = 0.0;
+        if (current_prices_.count(symbol)) {
+            market_value = position.quantity * current_prices_[symbol];
+        } else {
+            market_value = position.quantity * position.average_price;
+        }
+        
+        gross_exposure += std::abs(market_value);
+        net_exposure += market_value;
+    }
+    
+    // Final metrics update before shutdown
+    update_metrics();
     
     logger_.info("Positions: " + std::to_string(positions_.size()) + 
                 ", Total Unrealized P&L: " + std::to_string(total_unrealized) +

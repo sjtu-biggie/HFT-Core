@@ -2,7 +2,7 @@
 
 #include "../common/message_types.h"
 #include "../common/logging.h"
-#include "../common/config.h"
+#include "../common/static_config.h"
 #include "../common/metrics_publisher.h"
 #include <zmq.hpp>
 #include <memory>
@@ -33,7 +33,6 @@ public:
     bool is_running() const;
 
 private:
-    std::unique_ptr<Config> config_;
     
     // ZeroMQ sockets
     std::unique_ptr<zmq::context_t> context_;
@@ -44,6 +43,7 @@ private:
     // Threading
     std::atomic<bool> running_;
     std::unique_ptr<std::thread> processing_thread_;
+    std::unique_ptr<std::thread> metrics_thread_;
     
     // Position tracking
     std::unordered_map<std::string, Position> positions_;
@@ -69,6 +69,8 @@ private:
     void publish_position_update(const std::string& symbol);
     bool check_risk_limits(const TradingSignal& signal);
     void log_statistics();
+    void update_metrics();
+    void metrics_update_loop();
     
     Logger logger_;
 };

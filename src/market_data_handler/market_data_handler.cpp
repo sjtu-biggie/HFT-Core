@@ -31,7 +31,7 @@ MarketDataHandler::MarketDataHandler()
     symbol_prices_["AMZN"] = 145.0; symbol_volatilities_["AMZN"] = 0.30;
     symbol_prices_["NVDA"] = 900.0; symbol_volatilities_["NVDA"] = 0.35;
     symbol_prices_["META"] = 350.0; symbol_volatilities_["META"] = 0.32;
-    symbol_prices_["NFLX"] = 450.0; symbol_volatilities_["NFLX"] = 0.38;
+    symbol_prices_["NFLX"] = 450.0; symbol_volatilities_["NFLX"] = 0.68;
     symbol_prices_["SPY"] = 450.0; symbol_volatilities_["SPY"] = 0.15;
     symbol_prices_["QQQ"] = 380.0; symbol_volatilities_["QQQ"] = 0.20;
     symbol_prices_["IWM"] = 200.0; symbol_volatilities_["IWM"] = 0.25;
