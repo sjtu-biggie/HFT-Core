@@ -128,7 +128,6 @@ void MetricsAggregator::initialize_default_metrics() {
     init_metric(hft::metrics::MESSAGES_PROCESSED, MetricType::COUNTER);
     init_metric(hft::metrics::MESSAGES_PER_SECOND, MetricType::GAUGE);
     init_metric(hft::metrics::SIGNALS_GENERATED, MetricType::COUNTER);
-    init_metric(hft::metrics::DECISIONS_PER_SECOND, MetricType::GAUGE);
     init_metric(hft::metrics::ORDERS_SUBMITTED_TOTAL, MetricType::COUNTER);
     init_metric(hft::metrics::ORDERS_FILLED_TOTAL, MetricType::COUNTER);
     init_metric(hft::metrics::ORDERS_PER_SECOND, MetricType::GAUGE);

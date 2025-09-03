@@ -46,6 +46,14 @@ pkg_check_modules(JSONCPP REQUIRED jsoncpp)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBCURL REQUIRED libcurl)
 
+# Try to find libpcap for market data handler
+find_path(PCAP_INCLUDE_DIR pcap/pcap.h)
+find_library(PCAP_LIBRARY NAMES pcap libpcap)
+
+if(NOT PCAP_INCLUDE_DIR OR NOT PCAP_LIBRARY)
+    message(WARNING "libpcap not found. Install libpcap-dev for PCAP support")
+endif()
+
 # Find NUMA library for CPU affinity optimizations
 find_path(NUMA_INCLUDE_DIR numa.h)
 find_library(NUMA_LIBRARY NAMES numa libnuma)
@@ -70,7 +78,6 @@ endif()
 add_library(hft_common STATIC
     src/common/message_types.cpp
     src/common/logging.cpp
-    src/common/config.cpp
     src/common/static_config.cpp
     src/common/high_res_timer.cpp
     src/common/metrics_collector.cpp
@@ -107,6 +114,8 @@ set(SERVICES
 foreach(SERVICE ${SERVICES})
     if(SERVICE STREQUAL "order_gateway")
         add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp src/${SERVICE}/alpaca_client.cpp)
+    elseif(SERVICE STREQUAL "market_data_handler")
+        add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp src/${SERVICE}/pcap_reader.cpp src/${SERVICE}/alpaca_market_data.cpp)
     else()
         add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp)
     endif()
@@ -116,6 +125,16 @@ foreach(SERVICE ${SERVICES})
     if(SERVICE STREQUAL "order_gateway")
         target_link_libraries(${SERVICE} ${JSONCPP_LIBRARIES} ${LIBCURL_LIBRARIES})
         target_compile_options(${SERVICE} PRIVATE ${JSONCPP_CFLAGS_OTHER} ${LIBCURL_CFLAGS_OTHER})
+    endif()
+    
+    # Add pcap, libcurl and ssl support for market_data_handler
+    if(SERVICE STREQUAL "market_data_handler")
+        target_link_libraries(${SERVICE} ${LIBCURL_LIBRARIES} ssl crypto)
+        target_compile_options(${SERVICE} PRIVATE ${LIBCURL_CFLAGS_OTHER})
+        if(PCAP_LIBRARY)
+            target_link_libraries(${SERVICE} ${PCAP_LIBRARY})
+            target_compile_definitions(${SERVICE} PRIVATE HAS_PCAP=1)
+        endif()
     endif()
     
     # Add io_uring support for logger
@@ -131,10 +150,6 @@ add_subdirectory(src/backtesting)
 # Create test executables
 enable_testing()
 
-# Mock data generator for testing
-add_executable(mock_data_generator src/test/mock_data_generator.cpp)
-target_link_libraries(mock_data_generator hft_common ${ZMQ_LIBRARY} pthread)
-
 # Integration test
 add_executable(integration_test src/test/integration_test.cpp)
 target_link_libraries(integration_test hft_common ${ZMQ_LIBRARY} pthread)
@@ -146,8 +161,21 @@ target_link_libraries(test_message_types hft_common ${ZMQ_LIBRARY} pthread)
 add_executable(test_logging src/test/test_logging.cpp)
 target_link_libraries(test_logging hft_common ${ZMQ_LIBRARY} pthread)
 
-add_executable(test_config src/test/test_config.cpp)
-target_link_libraries(test_config hft_common ${ZMQ_LIBRARY} pthread)
+# Alpaca WebSocket integration test
+add_executable(test_alpaca_websocket 
+    src/test/test_alpaca_websocket.cpp
+    src/market_data_handler/alpaca_market_data.cpp
+)
+target_link_libraries(test_alpaca_websocket 
+    hft_common 
+    ${ZMQ_LIBRARY} 
+    curl
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ssl 
+    crypto
+    pthread
+)
 
 # Find Google Test for backtesting tests
 find_package(GTest QUIET)
@@ -173,11 +201,7 @@ add_test(NAME test_message_types COMMAND test_message_types)
 add_test(NAME test_logging COMMAND test_logging)
 add_test(NAME test_config COMMAND test_config)
 add_test(NAME integration_test COMMAND integration_test)
-
-# Install targets
-install(TARGETS ${SERVICES} mock_data_generator
-    RUNTIME DESTINATION bin
-)
+add_test(NAME test_alpaca_websocket COMMAND test_alpaca_websocket)
 
 # Create directories for runtime
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/logs)

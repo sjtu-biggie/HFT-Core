@@ -43,6 +43,7 @@ struct MarketData {
     double last_price;         // Last trade price
     uint32_t last_size;        // Last trade size
     uint64_t exchange_timestamp; // Exchange timestamp in nanoseconds
+    uint64_t publish_timestamp; // Publish timestamp in nanoseconds
 } __attribute__((packed));
 
 // Trading signal - output from strategy engine

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "message_types.h"
-#include "config.h"
+#include "static_config.h"
 
 #include <memory>
 #include <string>

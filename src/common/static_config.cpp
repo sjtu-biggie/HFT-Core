@@ -80,6 +80,9 @@ bool StaticConfig::load_from_file(const char* filename) {
         else if (key == "market_data.enable_dpdk") {
             runtime.enable_dpdk = (value == "true");
         }
+        else if (key == "market_data.source") {
+            runtime.market_data_source = value;
+        }
         else if (key == "logger.enable_io_uring") {
             runtime.enable_io_uring = (value == "true");
         }
@@ -101,6 +104,20 @@ bool StaticConfig::load_from_file(const char* filename) {
         else if (key == "mock_data.frequency_hz") {
             runtime.mock_data_frequency_hz = std::stoi(value);
         }
+        else if (key == "mock_data.symbols") {
+            // Parse comma-separated symbol list
+            runtime.symbols.clear();
+            std::istringstream iss(value);
+            std::string symbol;
+            while (std::getline(iss, symbol, ',')) {
+                // Trim whitespace from symbol
+                symbol.erase(0, symbol.find_first_not_of(" \t"));
+                symbol.erase(symbol.find_last_not_of(" \t") + 1);
+                if (!symbol.empty()) {
+                    runtime.symbols.push_back(symbol);
+                }
+            }
+        }
         else if (key == "risk.max_position_value") {
             runtime.max_position_value = std::stod(value);
         }
@@ -115,6 +132,46 @@ bool StaticConfig::load_from_file(const char* filename) {
         }
         else if (key == "strategy.momentum.min_signal_interval_ms") {
             runtime.min_signal_interval_ms = std::stoi(value);
+        }
+        // Alpaca configuration
+        else if (key == "alpaca.api_key") {
+            runtime.alpaca_api_key = value;
+        }
+        else if (key == "alpaca.secret_key") {
+            runtime.alpaca_secret_key = value;
+        }
+        else if (key == "alpaca.paper_trading") {
+            runtime.alpaca_paper_trading = (value == "true");
+        }
+        else if (key == "alpaca.websocket_feed") {
+            runtime.alpaca_websocket_feed = value;
+        }
+        else if (key == "alpaca.websocket_url") {
+            runtime.alpaca_websocket_url = value;
+        }
+        else if (key == "alpaca.websocket_host") {
+            runtime.alpaca_websocket_host = value;
+        }
+        else if (key == "alpaca.max_symbols_per_request") {
+            runtime.alpaca_max_symbols_per_request = std::stoi(value);
+        }
+        else if (key == "alpaca.max_message_size_kb") {
+            runtime.alpaca_max_message_size_kb = std::stoi(value);
+        }
+        else if (key == "alpaca.reconnect_interval_seconds") {
+            runtime.alpaca_reconnect_interval_seconds = std::stoi(value);
+        }
+        else if (key == "alpaca.max_reconnect_attempts") {
+            runtime.alpaca_max_reconnect_attempts = std::stoi(value);
+        }
+        else if (key == "alpaca.auth_timeout_seconds") {
+            runtime.alpaca_auth_timeout_seconds = std::stoi(value);
+        }
+        else if (key == "alpaca.circuit_breaker_failures") {
+            runtime.alpaca_circuit_breaker_failures = std::stoi(value);
+        }
+        else if (key == "alpaca.circuit_breaker_timeout_minutes") {
+            runtime.alpaca_circuit_breaker_timeout_minutes = std::stoi(value);
         }
         // Ignore unknown keys silently for forward compatibility
     }

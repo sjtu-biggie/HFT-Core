@@ -105,11 +105,6 @@ All services implemented as independent executables with proper lifecycle manage
   - Error handling for malformed configs
 
 #### Integration Tests
-- **Mock Data Generator** (`mock_data_generator.cpp`):
-  - Realistic market data simulation
-  - Configurable frequency and duration
-  - Multiple symbol support with random walk
-  - Performance monitoring and statistics
 
 - **Integration Test** (`integration_test.cpp`):
   - End-to-end message flow verification

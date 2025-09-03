@@ -3,7 +3,6 @@
 #include "../common/message_types.h"
 #include "../common/logging.h"
 #include "../common/metrics_publisher.h"
-#include "../common/config.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -84,9 +83,6 @@ public:
     void publish_signal(const TradingSignal& signal);
 
 private:
-    // Configuration
-    std::unique_ptr<Config> config_;
-    
     // ZeroMQ context and sockets
     std::unique_ptr<zmq::context_t> context_;
     std::unique_ptr<zmq::socket_t> subscriber_;     // Market data subscription

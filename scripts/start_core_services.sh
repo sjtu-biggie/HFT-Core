@@ -113,7 +113,7 @@ cd build
 # Check that executables exist
 REQUIRED_EXECUTABLES=(
     "low_latency_logger"
-    "mock_data_generator"
+    "market_data_handler"
     "strategy_engine"
     "order_gateway"
     "position_risk_service"
@@ -189,7 +189,7 @@ start_service "low_latency_logger" "./low_latency_logger"
 sleep 2
 
 # 2. Start Mock Data Generator (provides market data)
-start_service "mock_data_generator" "./mock_data_generator" "$MOCK_DURATION $MOCK_FREQUENCY"
+start_service "market_data_handler" "./market_data_handler" "$MOCK_DURATION $MOCK_FREQUENCY"
 
 # Small delay to ensure data is flowing
 sleep 2
