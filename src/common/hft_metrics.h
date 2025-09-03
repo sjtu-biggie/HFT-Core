@@ -116,26 +116,12 @@ constexpr const char* POSITION_SIZE_CURRENT = "position_size";
 constexpr const char* GROSS_EXPOSURE_USD = "gross_exposure_usd";
 constexpr const char* NET_EXPOSURE_USD = "net_exposure_usd";
 
-// Backward compatibility - deprecated, use above constants
-constexpr const char* POSITIONS_OPEN = "positions_open";
-constexpr const char* POSITIONS_CLOSED = "positions_closed_total";
-constexpr const char* POSITION_SIZE = "position_size";
-constexpr const char* GROSS_EXPOSURE = "gross_exposure_usd";
-constexpr const char* NET_EXPOSURE = "net_exposure_usd";
-
 // P&L Metrics - remove prefixes, use service labels
 constexpr const char* PNL_REALIZED_USD = "pnl_realized_usd";
 constexpr const char* PNL_UNREALIZED_USD = "pnl_unrealized_usd";
 constexpr const char* PNL_TOTAL_USD = "pnl_total_usd";
 constexpr const char* PNL_DAY_USD = "pnl_day_usd";
 constexpr const char* PNL_MTD_USD = "pnl_mtd_usd";
-
-// Backward compatibility - deprecated, use above constants
-constexpr const char* PNL_REALIZED = "pnl_realized_usd";
-constexpr const char* PNL_UNREALIZED = "pnl_unrealized_usd";
-constexpr const char* PNL_TOTAL = "pnl_total_usd";
-constexpr const char* PNL_DAY = "pnl_day_usd";
-constexpr const char* PNL_MTD = "pnl_mtd_usd";
 
 // Execution Quality - remove prefixes, use service labels
 constexpr const char* FILL_RATE_PERCENT = "fill_rate_percent";

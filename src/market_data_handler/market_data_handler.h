@@ -6,6 +6,7 @@
 #include "../common/hft_metrics.h"
 #include "../common/metrics_publisher.h"
 #include "pcap_reader.h"
+#include "alpaca_market_data.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -64,6 +65,12 @@ private:
     bool initialize_pcap_reader();
     void process_pcap_data();
     
+    // Alpaca real-time data processing
+    bool initialize_alpaca();
+    void process_alpaca_data();
+    void setup_alpaca_subscription();
+    void handle_alpaca_connection_error();
+    
     // Mock data generation for testing
     void generate_mock_data();
     
@@ -95,6 +102,15 @@ private:
     
     // PCAP reader for market data replay
     std::unique_ptr<PCAPReader> pcap_reader_;
+    
+    // Alpaca real-time data integration
+    std::unique_ptr<AlpacaMarketData> alpaca_client_;
+
+    // Alpaca connection state
+    std::atomic<bool> alpaca_connected_;
+    std::atomic<bool> alpaca_fallback_mode_;
+    std::chrono::steady_clock::time_point last_alpaca_data_;
+    std::atomic<uint64_t> alpaca_messages_received_;
 };
 
 } // namespace hft

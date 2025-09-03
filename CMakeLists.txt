@@ -127,9 +127,9 @@ foreach(SERVICE ${SERVICES})
         target_compile_options(${SERVICE} PRIVATE ${JSONCPP_CFLAGS_OTHER} ${LIBCURL_CFLAGS_OTHER})
     endif()
     
-    # Add pcap and libcurl support for market_data_handler
+    # Add pcap, libcurl and ssl support for market_data_handler
     if(SERVICE STREQUAL "market_data_handler")
-        target_link_libraries(${SERVICE} ${LIBCURL_LIBRARIES})
+        target_link_libraries(${SERVICE} ${LIBCURL_LIBRARIES} ssl crypto)
         target_compile_options(${SERVICE} PRIVATE ${LIBCURL_CFLAGS_OTHER})
         if(PCAP_LIBRARY)
             target_link_libraries(${SERVICE} ${PCAP_LIBRARY})
@@ -161,6 +161,22 @@ target_link_libraries(test_message_types hft_common ${ZMQ_LIBRARY} pthread)
 add_executable(test_logging src/test/test_logging.cpp)
 target_link_libraries(test_logging hft_common ${ZMQ_LIBRARY} pthread)
 
+# Alpaca WebSocket integration test
+add_executable(test_alpaca_websocket 
+    src/test/test_alpaca_websocket.cpp
+    src/market_data_handler/alpaca_market_data.cpp
+)
+target_link_libraries(test_alpaca_websocket 
+    hft_common 
+    ${ZMQ_LIBRARY} 
+    curl
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ssl 
+    crypto
+    pthread
+)
+
 # Find Google Test for backtesting tests
 find_package(GTest QUIET)
 if(GTest_FOUND)
@@ -185,6 +201,7 @@ add_test(NAME test_message_types COMMAND test_message_types)
 add_test(NAME test_logging COMMAND test_logging)
 add_test(NAME test_config COMMAND test_config)
 add_test(NAME integration_test COMMAND integration_test)
+add_test(NAME test_alpaca_websocket COMMAND test_alpaca_websocket)
 
 # Create directories for runtime
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/logs)

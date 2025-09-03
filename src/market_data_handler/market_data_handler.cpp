@@ -8,6 +8,7 @@
 #include <chrono>
 #include <random>
 #include <iostream>
+#include <sstream>
 
 namespace hft {
 
@@ -18,28 +19,21 @@ MarketDataHandler::MarketDataHandler()
     , bytes_processed_(0)
     , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) 
     , throughput_tracker_(hft::metrics::MD_MESSAGES_RECEIVED, hft::metrics::MD_MESSAGES_PER_SEC)
-    , metrics_publisher_("MarketDataHandler", "tcp://*:5562")
+    , metrics_publisher_("MarketDataHandler", ("tcp://*:" + std::to_string(StaticConfig::get_market_data_handler_metrics_port())).c_str())
     , price_generator_(std::random_device{}())
-    , price_change_dist_(0.0, 0.01) // Mean 0, std dev 1% for price changes
-    , session_start_time_(std::chrono::steady_clock::now()) {
+    , price_change_dist_(0.0, StaticConfig::get_price_change_volatility())
+    , session_start_time_(std::chrono::steady_clock::now())
+    , alpaca_connected_(false)
+    , alpaca_fallback_mode_(false)
+    , last_alpaca_data_(std::chrono::steady_clock::now())
+    , alpaca_messages_received_(0) {
     
-    // Initialize symbol base prices and volatilities
-    symbol_prices_["AAPL"] = 175.0; symbol_volatilities_["AAPL"] = 0.25;
-    symbol_prices_["GOOGL"] = 140.0; symbol_volatilities_["GOOGL"] = 0.28;
-    symbol_prices_["MSFT"] = 380.0; symbol_volatilities_["MSFT"] = 0.22;
-    symbol_prices_["TSLA"] = 250.0; symbol_volatilities_["TSLA"] = 0.45;
-    symbol_prices_["AMZN"] = 145.0; symbol_volatilities_["AMZN"] = 0.30;
-    symbol_prices_["NVDA"] = 900.0; symbol_volatilities_["NVDA"] = 0.35;
-    symbol_prices_["META"] = 350.0; symbol_volatilities_["META"] = 0.32;
-    symbol_prices_["NFLX"] = 450.0; symbol_volatilities_["NFLX"] = 0.68;
-    symbol_prices_["SPY"] = 450.0; symbol_volatilities_["SPY"] = 0.15;
-    symbol_prices_["QQQ"] = 380.0; symbol_volatilities_["QQQ"] = 0.20;
-    symbol_prices_["IWM"] = 200.0; symbol_volatilities_["IWM"] = 0.25;
-    symbol_prices_["GLD"] = 180.0; symbol_volatilities_["GLD"] = 0.18;
-    symbol_prices_["TLT"] = 95.0; symbol_volatilities_["TLT"] = 0.12;
-    symbol_prices_["VIX"] = 18.0; symbol_volatilities_["VIX"] = 0.80;
-    symbol_prices_["TQQQ"] = 45.0; symbol_volatilities_["TQQQ"] = 0.60;
-    symbol_prices_["SQQQ"] = 12.0; symbol_volatilities_["SQQQ"] = 0.60;
+    // Initialize symbol base prices and volatilities from StaticConfig
+    symbol_prices_ = StaticConfig::get_symbol_base_prices();
+    symbol_volatilities_ = StaticConfig::get_symbol_volatilities();
+    
+    // Simplified initialization - no complex throttling/circuit breakers
+    
 }
 
 MarketDataHandler::~MarketDataHandler() {
@@ -81,8 +75,9 @@ bool MarketDataHandler::initialize() {
         control_subscriber_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
         int rcvhwm = 100;
         control_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
-        control_subscriber_->connect("tcp://localhost:5570");
-        logger_.info("Connected to control endpoint: tcp://localhost:5570");
+        std::string control_endpoint = "tcp://localhost:" + std::to_string(StaticConfig::get_control_commands_port());
+        control_subscriber_->connect(control_endpoint);
+        logger_.info("Connected to control endpoint: " + control_endpoint);
         
         // Initialize data sources based on configuration
         std::string data_source = StaticConfig::get_market_data_source();
@@ -90,6 +85,11 @@ bool MarketDataHandler::initialize() {
         if (data_source == "pcap") {
             if (!initialize_pcap_reader()) {
                 logger_.warning("PCAP initialization failed, falling back to mock data");
+            }
+        } else if (data_source == "alpaca") {
+            if (!initialize_alpaca()) {
+                logger_.warning("Alpaca initialization failed, exiting");
+                return false;
             }
         } else if (StaticConfig::get_enable_dpdk()) {
             if (!initialize_dpdk()) {
@@ -176,12 +176,12 @@ void MarketDataHandler::process_market_data() {
     logger_.info("Market data processing thread started");
     
     auto last_stats_time = std::chrono::steady_clock::now();
-    const auto stats_interval = std::chrono::seconds(10);
+    const auto stats_interval = std::chrono::seconds(StaticConfig::get_stats_interval_seconds());
     
     while (running_.load()) {
         // Check if paused
         if (paused_.load()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(StaticConfig::get_poll_timeout_ms()));
             continue;
         }
         
@@ -192,9 +192,8 @@ void MarketDataHandler::process_market_data() {
             // PCAP file replay mode
             process_pcap_data();
         } else if (data_source == "alpaca") {
-            // Alpaca API mode (to be implemented)
-            logger_.warning("Alpaca data source not yet implemented, falling back to mock data");
-            generate_realistic_mock_data();
+            // Alpaca API mode with full integration
+            process_alpaca_data();
         } else if (StaticConfig::get_enable_dpdk()) {
             // DPDK mode
             process_dpdk_packets();
@@ -212,7 +211,7 @@ void MarketDataHandler::process_market_data() {
         
         // Small sleep to prevent busy waiting in mock mode
         if (!StaticConfig::get_enable_dpdk()) {
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            std::this_thread::sleep_for(std::chrono::microseconds(StaticConfig::get_processing_sleep_microseconds()));
         }
     }
     
@@ -238,7 +237,7 @@ void MarketDataHandler::process_control_messages() {
                 }
             }
             
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(StaticConfig::get_control_poll_interval_ms()));
             
         } catch (const std::exception& e) {
             logger_.error("Control message processing error: " + std::string(e.what()));
@@ -306,61 +305,13 @@ bool MarketDataHandler::process_dpdk_packets() {
     return false;
 }
 
-void MarketDataHandler::generate_mock_data() {
-    HFT_RDTSC_TIMER(hft::metrics::MD_TOTAL_LATENCY);
-    
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    static std::uniform_real_distribution<> price_dist(100.0, 500.0);
-    static std::uniform_int_distribution<> size_dist(100, 10000);
-    static std::uniform_real_distribution<> spread_dist(0.01, 0.10);
-    
-    // Common symbols for testing
-    static const std::vector<std::string> symbols = {
-        "AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX",
-        "SPY", "QQQ", "IWM", "GLD", "TLT", "VIX", "TQQQ", "SQQQ"
-    };
-    
-    static std::uniform_int_distribution<> symbol_dist(0, symbols.size() - 1);
-    
-    // Track data generation latency
-    {
-        HFT_RDTSC_TIMER(hft::metrics::MD_PARSE_LATENCY);
-        
-        // Generate market data for a random symbol
-        std::string symbol = symbols[symbol_dist(gen)];
-        double mid_price = price_dist(gen);
-        double spread = spread_dist(gen);
-        
-        double bid_price = mid_price - spread / 2.0;
-        double ask_price = mid_price + spread / 2.0;
-        uint32_t bid_size = size_dist(gen);
-        uint32_t ask_size = size_dist(gen);
-        
-        // Create last trade
-        double last_price = bid_price + (ask_price - bid_price) * 
-                           std::uniform_real_distribution<>(0.0, 1.0)(gen);
-        uint32_t last_size = std::uniform_int_distribution<>(100, 1000)(gen);
-        
-        MarketData data = MessageFactory::create_market_data(
-            symbol, bid_price, ask_price, bid_size, ask_size, last_price, last_size
-        );
-        
-        // Track message generation metrics
-        HFT_COMPONENT_COUNTER(hft::metrics::MD_MESSAGES_PROCESSED);
-        throughput_tracker_.increment();
-        
-        publish_market_data(data);
-    }
-}
-
 void MarketDataHandler::publish_market_data(const MarketData& data) {
     HFT_RDTSC_TIMER(hft::metrics::MD_PUBLISH_LATENCY);
     
     try {
         zmq::message_t message(sizeof(MarketData));
         std::memcpy(message.data(), &data, sizeof(MarketData));
-        
+        logger_.info("Publishing market data: " + std::string(data.symbol) + " " + std::to_string(data.bid_price) + " " + std::to_string(data.ask_price) + " " + std::to_string(data.bid_size) + " " + std::to_string(data.ask_size) + " " + std::to_string(data.last_price) + " " + std::to_string(data.last_size));
         {
             publisher_->send(message, zmq::send_flags::dontwait);
         }
@@ -386,11 +337,21 @@ void MarketDataHandler::generate_realistic_mock_data() {
     HFT_RDTSC_TIMER(hft::metrics::MD_TOTAL_LATENCY);
     
     // Select symbol in round-robin fashion for better distribution
-    static const std::vector<std::string> symbols = {
-        "AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META", "NFLX",
-        "SPY", "QQQ", "IWM", "GLD", "TLT", "VIX", "TQQQ", "SQQQ"
-    };
+    static std::vector<std::string> symbols;
+    static bool symbols_initialized = false;
+    
+    if (!symbols_initialized) {
+        // Get symbols from configuration
+        const std::vector<std::string>& config_symbols = StaticConfig::get_symbols();
+        symbols = config_symbols;  // Copy the vector
+        symbols_initialized = true;
+    }
+    
     static size_t symbol_index = 0;
+    if (symbols.empty()) {
+        // Fallback if no symbols configured
+        symbols = {"AAPL"};
+    }
     std::string symbol = symbols[symbol_index];
     symbol_index = (symbol_index + 1) % symbols.size();
     
@@ -412,14 +373,14 @@ void MarketDataHandler::generate_realistic_mock_data() {
     
     // Update symbol price with bounds checking
     double new_price = current_price + price_change;
-    double min_price = get_symbol_base_price(symbol) * 0.5; // Don't go below 50% of base
-    double max_price = get_symbol_base_price(symbol) * 2.0; // Don't go above 200% of base
+    double min_price = get_symbol_base_price(symbol) * StaticConfig::get_min_price_multiplier();
+    double max_price = get_symbol_base_price(symbol) * StaticConfig::get_max_price_multiplier();
     
     new_price = std::max(min_price, std::min(max_price, new_price));
     symbol_prices_[symbol] = new_price;
     
     // Generate realistic bid/ask spread based on price and volatility
-    double spread_bp = 5.0 + (effective_volatility * 100.0); // 5-50 basis points
+    double spread_bp = StaticConfig::get_base_spread_basis_points() + (effective_volatility * 100.0);
     double spread = new_price * (spread_bp / 10000.0);
     
     double bid_price = new_price - spread / 2.0;
@@ -427,8 +388,8 @@ void MarketDataHandler::generate_realistic_mock_data() {
     
     // Generate volume based on volatility (higher vol = higher volume)
     std::uniform_int_distribution<uint32_t> volume_dist(
-        static_cast<uint32_t>(1000 * (1.0 - effective_volatility)),
-        static_cast<uint32_t>(5000 * (1.0 + effective_volatility))
+        static_cast<uint32_t>(StaticConfig::get_min_volume() * (1.0 - effective_volatility)),
+        static_cast<uint32_t>(StaticConfig::get_max_volume() * (1.0 + effective_volatility))
     );
     uint32_t bid_size = volume_dist(price_generator_);
     uint32_t ask_size = volume_dist(price_generator_);
@@ -436,7 +397,7 @@ void MarketDataHandler::generate_realistic_mock_data() {
     // Generate last trade within spread
     std::uniform_real_distribution<double> trade_price_dist(0.2, 0.8);
     double last_price = bid_price + (ask_price - bid_price) * trade_price_dist(price_generator_);
-    uint32_t last_size = std::uniform_int_distribution<uint32_t>(100, 1000)(price_generator_);
+    uint32_t last_size = std::uniform_int_distribution<uint32_t>(StaticConfig::get_min_last_size(), StaticConfig::get_max_last_size())(price_generator_);
     
     // Create market data message
     MarketData data = MessageFactory::create_market_data(
@@ -571,6 +532,111 @@ void MarketDataHandler::log_statistics() {
     std::string stats = "Processed " + std::to_string(msg_count) + 
                        " messages, " + std::to_string(byte_count) + " bytes";
     logger_.info(stats);
+}
+
+bool MarketDataHandler::initialize_alpaca() {
+    logger_.info("Initializing Alpaca market data client");
+    
+    // Check API keys are configured
+    std::string api_key = StaticConfig::get_alpaca_api_key();
+    std::string secret_key = StaticConfig::get_alpaca_secret_key();
+    
+    if (api_key.empty() || secret_key.empty()) {
+        logger_.error("Alpaca API keys not configured");
+        return false;
+    }
+    
+    // Create Alpaca client
+    alpaca_client_ = std::make_unique<AlpacaMarketData>();
+    
+    // Initialize with credentials and WebSocket configuration
+    bool paper_trading = StaticConfig::get_alpaca_paper_trading();
+    std::string websocket_url = StaticConfig::get_alpaca_websocket_url();
+    std::string websocket_host = StaticConfig::get_alpaca_websocket_host();
+    
+    if (!alpaca_client_->initialize(api_key, secret_key, websocket_url, websocket_host, paper_trading)) {
+        logger_.error("Failed to initialize Alpaca client");
+        alpaca_client_.reset();
+        return false;
+    }
+    
+    // Set up market data callback
+    alpaca_client_->set_data_callback([this](const MarketData& data) {
+        // Update last data time
+        last_alpaca_data_ = std::chrono::steady_clock::now();
+        alpaca_messages_received_++;
+        
+        // Publish market data through existing infrastructure
+        publish_market_data(data);
+        
+        // Update HFT metrics
+        HFT_COMPONENT_COUNTER(hft::metrics::MD_MESSAGES_PROCESSED);
+        throughput_tracker_.increment();
+    });
+    
+    logger_.info("Alpaca client initialized successfully");
+    return true;
+}
+
+void MarketDataHandler::process_alpaca_data() {
+    // Check connection health
+    auto now = std::chrono::steady_clock::now();
+    auto time_since_data = now - last_alpaca_data_;
+    
+    if (alpaca_connected_.load() && time_since_data > std::chrono::minutes(1)) {
+        logger_.warning("No Alpaca data received for 1 minute, checking connection");
+        handle_alpaca_connection_error();
+    }
+    
+    // Try to connect if not connected - simplified
+    if (!alpaca_connected_.load()) {
+        logger_.info("Attempting to connect to Alpaca");
+        
+        // Start processing FIRST (sets running_ = true)
+        alpaca_client_->start();
+        
+        if (alpaca_client_->connect()) {
+            logger_.info("Connected to Alpaca successfully");
+            alpaca_connected_ = true;
+            
+            // Set up subscription
+            setup_alpaca_subscription();
+            
+        } else {
+            logger_.error("Failed to connect to Alpaca");
+            // Stop if connection failed
+            alpaca_client_->stop();
+        }
+    }
+    return;
+}
+
+void MarketDataHandler::setup_alpaca_subscription() {
+    if (!alpaca_client_ || !alpaca_connected_.load()) {
+        return;
+    }
+    
+    // Get symbols from configuration - simplified
+    const std::vector<std::string>& symbols = StaticConfig::get_symbols();
+    
+    logger_.info("Setting up Alpaca subscription for " + std::to_string(symbols.size()) + " symbols");
+    
+    // Subscribe to all symbols at once - simplified
+    if (!alpaca_client_->subscribe(symbols)) {
+        logger_.error("Failed to subscribe to symbols");
+    } else {
+        logger_.info("Subscribed to " + std::to_string(symbols.size()) + " symbols");
+    }
+}
+
+void MarketDataHandler::handle_alpaca_connection_error() {
+    logger_.warning("Handling Alpaca connection error");
+    
+    alpaca_connected_ = false;
+    
+    if (alpaca_client_) {
+        alpaca_client_->stop();
+    }
 }
 
 } // namespace hft

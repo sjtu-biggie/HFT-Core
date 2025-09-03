@@ -13,7 +13,7 @@ PositionRiskService::PositionRiskService()
     : running_(false), max_position_value_(100000.0), max_daily_loss_(5000.0)
     , current_daily_pnl_(0.0), positions_updated_(0), risk_checks_(0), risk_violations_(0)
     , logger_("PositionRiskService", StaticConfig::get_logger_endpoint())
-    , metrics_publisher_("PositionRiskService", "tcp://*:5564") {
+    , metrics_publisher_("PositionRiskService", ("tcp://*:" + std::to_string(StaticConfig::get_position_risk_service_metrics_port())).c_str()) {
 }
 
 PositionRiskService::~PositionRiskService() {
@@ -112,7 +112,6 @@ void PositionRiskService::stop() {
         } catch (const zmq::error_t&) {}
     }
     
-    log_statistics();
     logger_.info("Service stopped");
 }
 
@@ -290,11 +289,29 @@ void PositionRiskService::update_metrics() {
     
     // Update metrics
     HFT_GAUGE_VALUE(hft::metrics::POSITIONS_OPEN_COUNT, positions_.size());
-    HFT_GAUGE_VALUE(hft::metrics::PNL_UNREALIZED_USD, static_cast<uint64_t>(total_unrealized));
-    HFT_GAUGE_VALUE(hft::metrics::PNL_REALIZED_USD, static_cast<uint64_t>(total_realized));
-    HFT_GAUGE_VALUE(hft::metrics::PNL_TOTAL_USD, static_cast<uint64_t>(total_unrealized + total_realized));
+    HFT_GAUGE_VALUE(hft::metrics::PNL_UNREALIZED_USD, static_cast<double>(total_unrealized));
+    HFT_GAUGE_VALUE(hft::metrics::PNL_REALIZED_USD, static_cast<double>(total_realized));
+    HFT_GAUGE_VALUE(hft::metrics::PNL_TOTAL_USD, static_cast<double>(total_unrealized + total_realized));
     HFT_GAUGE_VALUE(hft::metrics::GROSS_EXPOSURE_USD, static_cast<uint64_t>(gross_exposure));
     HFT_GAUGE_VALUE(hft::metrics::NET_EXPOSURE_USD, static_cast<uint64_t>(net_exposure));
+    
+    // Log each symbol's details
+    for (const auto& [symbol, position] : positions_) {
+        double current_price = current_prices_.count(symbol) ? current_prices_[symbol] : 0.0;
+        logger_.info("Symbol: " + symbol + 
+                    " | Current Price: " + std::to_string(current_price) +
+                    " | Our Avg Price: " + std::to_string(position.average_price) +
+                    " | Our Volume: " + std::to_string(position.quantity) +
+                    " | Per-Symbol Profit: " + std::to_string(position.unrealized_pnl));
+    }
+    
+    // Log each metric update
+    logger_.info("POSITIONS_OPEN_COUNT: " + std::to_string(positions_.size()));
+    logger_.info("PNL_UNREALIZED_USD: " + std::to_string(static_cast<double>(total_unrealized)));
+    logger_.info("PNL_REALIZED_USD: " + std::to_string(static_cast<double>(total_realized)));
+    logger_.info("PNL_TOTAL_USD: " + std::to_string(static_cast<double>(total_unrealized + total_realized)));
+    logger_.info("GROSS_EXPOSURE_USD: " + std::to_string(static_cast<uint64_t>(gross_exposure)));
+    logger_.info("NET_EXPOSURE_USD: " + std::to_string(static_cast<uint64_t>(net_exposure)));
 }
 
 void PositionRiskService::metrics_update_loop() {
@@ -304,8 +321,8 @@ void PositionRiskService::metrics_update_loop() {
         try {
             update_metrics();
             
-            // Update metrics every 5 seconds
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            // Update metrics at configurable interval
+            std::this_thread::sleep_for(std::chrono::seconds(StaticConfig::get_metrics_update_interval_seconds()));
             
         } catch (const std::exception& e) {
             logger_.error("Metrics update error: " + std::string(e.what()));
@@ -315,35 +332,5 @@ void PositionRiskService::metrics_update_loop() {
     logger_.info("Metrics update loop stopped");
 }
 
-void PositionRiskService::log_statistics() {
-    double total_unrealized = 0.0;
-    double total_realized = 0.0;
-    double gross_exposure = 0.0;
-    double net_exposure = 0.0;
-    
-    for (const auto& [symbol, position] : positions_) {
-        total_unrealized += position.unrealized_pnl;
-        total_realized += position.realized_pnl;
-        
-        // Calculate exposure (using current prices if available)
-        double market_value = 0.0;
-        if (current_prices_.count(symbol)) {
-            market_value = position.quantity * current_prices_[symbol];
-        } else {
-            market_value = position.quantity * position.average_price;
-        }
-        
-        gross_exposure += std::abs(market_value);
-        net_exposure += market_value;
-    }
-    
-    // Final metrics update before shutdown
-    update_metrics();
-    
-    logger_.info("Positions: " + std::to_string(positions_.size()) + 
-                ", Total Unrealized P&L: " + std::to_string(total_unrealized) +
-                ", Risk Checks: " + std::to_string(risk_checks_.load()) +
-                ", Risk Violations: " + std::to_string(risk_violations_.load()));
-}
 
 } // namespace hft
