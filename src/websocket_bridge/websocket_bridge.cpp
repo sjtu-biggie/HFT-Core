@@ -37,8 +37,8 @@ public:
         , execution_subscriber_(context_, ZMQ_SUB)
         , control_publisher_(context_, ZMQ_PUB)
         , server_socket_(-1)
-        , port_(8080)
-        , metrics_aggregator_("tcp://localhost:5560") {
+        , port_(StaticConfig::get_websocket_port())
+        , metrics_aggregator_(StaticConfig::get_metrics_aggregator_endpoint()) {
         
         // Subscribe to all market data messages
         zmq_subscriber_.setsockopt(ZMQ_SUBSCRIBE, "", 0);
@@ -75,9 +75,10 @@ public:
             execution_subscriber_.connect(exec_endpoint);
             logger_.info("Connected to executions endpoint: " + exec_endpoint);
             
-            // Bind control publisher - using port 5570 for control commands
-            control_publisher_.bind("tcp://*:5570");
-            logger_.info("Control publisher bound to tcp://*:5570");
+            // Bind control publisher
+            std::string control_endpoint = StaticConfig::get_control_commands_bind_endpoint();
+            control_publisher_.bind(control_endpoint);
+            logger_.info("Control publisher bound to " + control_endpoint);
             
             // Create HTTP server socket
             server_socket_ = socket(AF_INET, SOCK_STREAM, 0);

@@ -1,4 +1,5 @@
 #include "metrics_aggregator.h"
+#include "static_config.h"
 #include "hft_metrics.h"
 #include "high_res_timer.h"
 #include <iostream>
@@ -31,10 +32,10 @@ bool MetricsAggregator::initialize() {
         
         // Connect to multiple service endpoints
         std::vector<std::string> endpoints = {
-            "tcp://localhost:5561", // Strategy Engine
-            "tcp://localhost:5562", // Market Data Handler  
-            "tcp://localhost:5563", // Order Gateway
-            "tcp://localhost:5564"  // Position Risk Service
+            StaticConfig::get_strategy_engine_metrics_endpoint(),      // Strategy Engine
+            StaticConfig::get_market_data_handler_metrics_endpoint(),  // Market Data Handler  
+            StaticConfig::get_order_gateway_metrics_endpoint(),       // Order Gateway
+            StaticConfig::get_position_risk_service_metrics_endpoint() // Position Risk Service
         };
         
         for (const auto& endpoint : endpoints) {

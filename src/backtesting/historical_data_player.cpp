@@ -35,10 +35,10 @@ bool HistoricalDataPlayer::initialize() {
         publisher_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         
         // Bind to the same endpoint as market data handler
-        const char* endpoint = StaticConfig::get_market_data_endpoint();
-        publisher_->bind(endpoint);
+        const std::string market_data_endpoint = StaticConfig::get_market_data_endpoint();
+        publisher_->bind(market_data_endpoint);
         
-        logger_.info("Historical Data Player bound to " + std::string(endpoint));
+        logger_.info("Historical Data Player bound to " + market_data_endpoint);
         
         if (historical_data_.empty()) {
             logger_.warning("No historical data loaded. Use load_data_file() first.");

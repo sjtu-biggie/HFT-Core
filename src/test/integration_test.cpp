@@ -30,22 +30,22 @@ public:
             // Market data subscriber
             market_data_sub_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
             market_data_sub_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-            market_data_sub_->connect("tcp://localhost:5556");
+            market_data_sub_->connect(StaticConfig::get_market_data_endpoint());
             
             // Trading signals subscriber
             signals_sub_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
             signals_sub_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-            signals_sub_->connect("tcp://localhost:5558");
+            signals_sub_->connect(StaticConfig::get_signals_endpoint());
             
             // Order executions subscriber
             executions_sub_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
             executions_sub_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-            executions_sub_->connect("tcp://localhost:5557");
+            executions_sub_->connect(StaticConfig::get_executions_endpoint());
             
             // Position updates subscriber
             positions_sub_ = std::make_unique<zmq::socket_t>(*context_, ZMQ_SUB);
             positions_sub_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-            positions_sub_->connect("tcp://localhost:5559");
+            positions_sub_->connect(StaticConfig::get_positions_endpoint());
             
             logger_.info("All subscribers initialized");
             

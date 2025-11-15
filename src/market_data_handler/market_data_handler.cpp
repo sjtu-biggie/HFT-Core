@@ -19,7 +19,7 @@ MarketDataHandler::MarketDataHandler()
     , bytes_processed_(0)
     , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) 
     , throughput_tracker_(hft::metrics::MD_MESSAGES_RECEIVED, hft::metrics::MD_MESSAGES_PER_SEC)
-    , metrics_publisher_("MarketDataHandler", ("tcp://*:" + std::to_string(StaticConfig::get_market_data_handler_metrics_port())).c_str())
+    , metrics_publisher_("MarketDataHandler", StaticConfig::get_market_data_handler_metrics_bind_endpoint())
     , price_generator_(std::random_device{}())
     , price_change_dist_(0.0, StaticConfig::get_price_change_volatility())
     , session_start_time_(std::chrono::steady_clock::now())
@@ -66,7 +66,7 @@ bool MarketDataHandler::initialize() {
         publisher_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         
         // Bind to market data endpoint
-        const char* endpoint = StaticConfig::get_market_data_endpoint();
+        std::string endpoint = StaticConfig::get_market_data_endpoint();
         publisher_->bind(endpoint);
         
         logger_.info("Bound to market data endpoint: " + std::string(endpoint));
@@ -75,7 +75,7 @@ bool MarketDataHandler::initialize() {
         control_subscriber_->setsockopt(ZMQ_SUBSCRIBE, "", 0);
         int rcvhwm = 100;
         control_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
-        std::string control_endpoint = "tcp://localhost:" + std::to_string(StaticConfig::get_control_commands_port());
+        std::string control_endpoint = StaticConfig::get_control_commands_endpoint();
         control_subscriber_->connect(control_endpoint);
         logger_.info("Connected to control endpoint: " + control_endpoint);
         

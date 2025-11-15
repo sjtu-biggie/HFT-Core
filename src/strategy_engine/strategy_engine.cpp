@@ -84,7 +84,7 @@ StrategyEngine::StrategyEngine()
     , market_data_processed_(0)
     , signals_generated_(0)
     , logger_("StrategyEngine", StaticConfig::get_logger_endpoint())
-    , metrics_publisher_("StrategyEngine", "tcp://*:5561") {
+    , metrics_publisher_("StrategyEngine", StaticConfig::get_strategy_engine_metrics_bind_endpoint()) {
 }
 
 StrategyEngine::~StrategyEngine() {
@@ -127,16 +127,16 @@ bool StrategyEngine::initialize() {
         signal_pub_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         
         // Connect to endpoints using StaticConfig for better performance
-        const char* market_data_endpoint = StaticConfig::get_market_data_endpoint();
+        const std::string market_data_endpoint = StaticConfig::get_market_data_endpoint();
         subscriber_->connect(market_data_endpoint);
         logger_.info("Connected to market data: " + std::string(market_data_endpoint));
         
         // Connect to executions endpoint using StaticConfig
-        const char* executions_endpoint = StaticConfig::get_executions_endpoint();
+        const std::string executions_endpoint = StaticConfig::get_executions_endpoint();
         execution_sub_->connect(executions_endpoint);
         
         // Bind signal publisher
-        const char* signals_endpoint = StaticConfig::get_signals_endpoint();
+        const std::string signals_endpoint = StaticConfig::get_signals_endpoint();
         signal_pub_->bind(signals_endpoint);
         logger_.info("Signal publisher bound to " + std::string(signals_endpoint));
         

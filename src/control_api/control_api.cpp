@@ -28,7 +28,7 @@ public:
         , context_(1)
         , zmq_publisher_(context_, ZMQ_PUB)
         , server_socket_(-1)
-        , port_(8081)
+        , port_(StaticConfig::get_control_api_port())
         , api_key_(get_api_key_from_env()) {
         
         // Set socket options for publishing
@@ -43,7 +43,8 @@ public:
     bool initialize() {
         try {
             // Bind ZMQ publisher to send control commands
-            std::string zmq_endpoint = "tcp://*:5560";  // Control command endpoint
+            std::string zmq_endpoint = StaticConfig::get_control_commands_bind_endpoint();
+            logger_.info("Binding to control commands endpoint: " + zmq_endpoint);
             zmq_publisher_.bind(zmq_endpoint);
             logger_.info("ZMQ publisher bound to: " + zmq_endpoint);
             

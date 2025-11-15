@@ -42,7 +42,7 @@ private:
 class GlobalLogger {
 public:
     static GlobalLogger& instance();
-    void init(const std::string& component_name, const std::string& endpoint = "tcp://localhost:5555");
+    void init(const std::string& component_name, const std::string& endpoint);
     Logger& get();
 
 private:

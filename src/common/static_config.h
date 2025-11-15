@@ -11,23 +11,40 @@ namespace hft {
 // This replaces the slow hash map based Config class for performance-critical paths
 class StaticConfig {
 public:
-    // Network endpoints - compile time constants for zero-cost access
-    static constexpr const char* MARKET_DATA_ENDPOINT = "tcp://localhost:5556";
-    static constexpr const char* LOGGER_ENDPOINT = "tcp://localhost:5555";
-    static constexpr const char* SIGNALS_ENDPOINT = "tcp://localhost:5558";
-    static constexpr const char* EXECUTIONS_ENDPOINT = "tcp://localhost:5557";
-    static constexpr const char* POSITIONS_ENDPOINT = "tcp://localhost:5559";
-    static constexpr const char* CONTROL_ENDPOINT = "tcp://localhost:8080";
-    static constexpr const char* WEBSOCKET_ENDPOINT = "tcp://localhost:8081";
-    
-    // Port numbers as integers for direct use
-    static constexpr int CONTROL_API_PORT = 8080;
-    static constexpr int WEBSOCKET_PORT = 8081;
+    // Port numbers as integers for direct use (defined first)
+    static constexpr int CONTROL_API_PORT = 8081;
+    static constexpr int WEBSOCKET_PORT = 8080;
     static constexpr int MARKET_DATA_PORT = 5556;
     static constexpr int LOGGER_PORT = 5555;
     static constexpr int SIGNALS_PORT = 5558;
     static constexpr int EXECUTIONS_PORT = 5557;
     static constexpr int POSITIONS_PORT = 5559;
+    
+    // Helper function to construct endpoint string from port number
+    static std::string make_endpoint(int port, const char* host = "localhost") {
+        return std::string("tcp://") + host + ":" + std::to_string(port);
+    }
+    
+    // Helper function to construct endpoint string with wildcard binding
+    static std::string make_bind_endpoint(int port) {
+        return std::string("tcp://*:") + std::to_string(port);
+    }
+    
+    // Endpoint getters - constructed from port constants
+    static const std::string get_market_data_endpoint() { return runtime.market_data_endpoint_storage.empty() ? 
+        make_endpoint(MARKET_DATA_PORT) : runtime.market_data_endpoint_storage; }
+    static const std::string get_logger_endpoint() { return runtime.logger_endpoint_storage.empty() ? 
+        make_endpoint(LOGGER_PORT) : runtime.logger_endpoint_storage; }
+    static const std::string get_signals_endpoint() { return runtime.signals_endpoint_storage.empty() ? 
+        make_endpoint(SIGNALS_PORT) : runtime.signals_endpoint_storage; }
+    static const std::string get_executions_endpoint() { return runtime.executions_endpoint_storage.empty() ? 
+        make_endpoint(EXECUTIONS_PORT) : runtime.executions_endpoint_storage; }
+    static const std::string get_positions_endpoint() { return runtime.positions_endpoint_storage.empty() ? 
+        make_endpoint(POSITIONS_PORT) : runtime.positions_endpoint_storage; }
+    static const std::string get_websocket_endpoint() { return runtime.websocket_endpoint_storage.empty() ? 
+        make_endpoint(WEBSOCKET_PORT) : runtime.websocket_endpoint_storage; }
+    static const std::string get_control_endpoint() { return runtime.control_endpoint_storage.empty() ? 
+        make_endpoint(CONTROL_API_PORT) : runtime.control_endpoint_storage; }
     
     // Performance tuning parameters
     static constexpr int ZMQ_SEND_HWM = 1000;
@@ -132,18 +149,14 @@ public:
     
     // Runtime configuration override support (for file-based config)
     struct RuntimeOverrides {
-        const char* market_data_endpoint = MARKET_DATA_ENDPOINT;
-        const char* logger_endpoint = LOGGER_ENDPOINT;
-        const char* signals_endpoint = SIGNALS_ENDPOINT;
-        const char* executions_endpoint = EXECUTIONS_ENDPOINT;
-        const char* positions_endpoint = POSITIONS_ENDPOINT;
-        
-        // String storage for dynamically loaded endpoint configurations
+        // String storage for endpoint configurations (constructed from port constants by default)
         std::string market_data_endpoint_storage;
         std::string logger_endpoint_storage;
         std::string signals_endpoint_storage;
         std::string executions_endpoint_storage;
         std::string positions_endpoint_storage;
+        std::string control_endpoint_storage;
+        std::string websocket_endpoint_storage;
         
         bool enable_dpdk = ENABLE_DPDK;
         bool enable_io_uring = ENABLE_IO_URING;
@@ -154,6 +167,20 @@ public:
         
         int log_level = DEFAULT_LOG_LEVEL;
         int mock_data_frequency_hz = MOCK_DATA_FREQUENCY_HZ;
+        
+        // Port number overrides
+        int control_api_port = CONTROL_API_PORT;
+        int websocket_port = WEBSOCKET_PORT;
+        int market_data_port = MARKET_DATA_PORT;
+        int logger_port = LOGGER_PORT;
+        int signals_port = SIGNALS_PORT;
+        int executions_port = EXECUTIONS_PORT;
+        int positions_port = POSITIONS_PORT;
+        
+        // ZMQ parameters
+        int zmq_send_hwm = ZMQ_SEND_HWM;
+        int zmq_recv_hwm = ZMQ_RECV_HWM;
+        int zmq_linger_ms = ZMQ_LINGER_MS;
         
         double max_position_value = MAX_POSITION_VALUE;
         double max_daily_loss = MAX_DAILY_LOSS;
@@ -217,6 +244,10 @@ public:
             {"TLT", 0.12}, {"VIX", 0.80}, {"TQQQ", 0.60}, {"SQQQ", 0.60}
         };
         
+        // Trading mode configuration
+        std::string trading_mode = "mock"; // "mock", "paper", "live"
+        bool use_websocket_updates = true;
+        
         // Alpaca API configuration
         std::string alpaca_api_key;
         std::string alpaca_secret_key;
@@ -224,6 +255,12 @@ public:
         std::string alpaca_websocket_feed = "iex"; // "iex" (free) or "sip" (paid)
         std::string alpaca_websocket_url = "wss://stream.data.alpaca.markets/v2/iex";
         std::string alpaca_websocket_host = "stream.data.alpaca.markets";
+        
+        // Alpaca trading configuration
+        std::string alpaca_paper_base_url = "https://paper-api.alpaca.markets";
+        std::string alpaca_live_base_url = "https://api.alpaca.markets";
+        std::string alpaca_trade_websocket_url = "wss://stream.data.alpaca.markets/v2/iex";
+        std::string alpaca_trade_websocket_host = "stream.data.alpaca.markets";
         int alpaca_max_symbols_per_request = ALPACA_MAX_SYMBOLS_PER_REQUEST;
         int alpaca_max_message_size_kb = ALPACA_MAX_MESSAGE_SIZE_KB;
         int alpaca_reconnect_interval_seconds = ALPACA_RECONNECT_INTERVAL_SECONDS;
@@ -237,22 +274,41 @@ public:
     // Global runtime overrides (for file-based configuration)
     static RuntimeOverrides runtime;
     
-    // Fast access methods that check runtime overrides first, then fall back to compile-time
-    static const char* get_market_data_endpoint() { return runtime.market_data_endpoint; }
-    static const char* get_logger_endpoint() { return runtime.logger_endpoint; }
-    static const char* get_signals_endpoint() { return runtime.signals_endpoint; }
-    static const char* get_executions_endpoint() { return runtime.executions_endpoint; }
-    static const char* get_positions_endpoint() { return runtime.positions_endpoint; }
+    // Fast access methods - endpoint getters are defined above (after helper functions)
     
     static bool get_enable_dpdk() { return runtime.enable_dpdk; }
     static bool get_enable_io_uring() { return runtime.enable_io_uring; }
     static bool get_trading_enabled() { return runtime.trading_enabled; }
     static bool get_paper_trading() { return runtime.paper_trading; }
     static bool get_mock_data_enabled() { return runtime.mock_data_enabled; }
+    
+    // Trading mode configuration
+    static const std::string& get_trading_mode() { return runtime.trading_mode; }
+    static bool get_use_websocket_updates() { return runtime.use_websocket_updates; }
+    
+    // Alpaca trading configuration
+    static const std::string& get_alpaca_paper_base_url() { return runtime.alpaca_paper_base_url; }
+    static const std::string& get_alpaca_live_base_url() { return runtime.alpaca_live_base_url; }
+    static const std::string& get_alpaca_trade_websocket_url() { return runtime.alpaca_trade_websocket_url; }
+    static const std::string& get_alpaca_trade_websocket_host() { return runtime.alpaca_trade_websocket_host; }
     static bool get_log_to_console() { return runtime.log_to_console; }
     
     static int get_log_level() { return runtime.log_level; }
     static int get_mock_data_frequency_hz() { return runtime.mock_data_frequency_hz; }
+    
+    // Port number getters
+    static int get_control_api_port() { return runtime.control_api_port; }
+    static int get_websocket_port() { return runtime.websocket_port; }
+    static int get_market_data_port() { return runtime.market_data_port; }
+    static int get_logger_port() { return runtime.logger_port; }
+    static int get_signals_port() { return runtime.signals_port; }
+    static int get_executions_port() { return runtime.executions_port; }
+    static int get_positions_port() { return runtime.positions_port; }
+    
+    // ZMQ parameter getters
+    static int get_zmq_send_hwm() { return runtime.zmq_send_hwm; }
+    static int get_zmq_recv_hwm() { return runtime.zmq_recv_hwm; }
+    static int get_zmq_linger_ms() { return runtime.zmq_linger_ms; }
     
     static double get_max_position_value() { return runtime.max_position_value; }
     static double get_max_daily_loss() { return runtime.max_daily_loss; }
@@ -278,6 +334,22 @@ public:
     static int get_position_risk_service_metrics_port() { return runtime.position_risk_service_metrics_port; }
     static int get_metrics_aggregator_port() { return runtime.metrics_aggregator_port; }
     static int get_control_commands_port() { return runtime.control_commands_port; }
+    
+    // Metrics endpoint getters (constructed from ports)
+    static std::string get_strategy_engine_metrics_endpoint() { return make_endpoint(get_strategy_engine_metrics_port()); }
+    static std::string get_market_data_handler_metrics_endpoint() { return make_endpoint(get_market_data_handler_metrics_port()); }
+    static std::string get_order_gateway_metrics_endpoint() { return make_endpoint(get_order_gateway_metrics_port()); }
+    static std::string get_position_risk_service_metrics_endpoint() { return make_endpoint(get_position_risk_service_metrics_port()); }
+    static std::string get_metrics_aggregator_endpoint() { return make_endpoint(get_metrics_aggregator_port()); }
+    static std::string get_control_commands_endpoint() { return make_endpoint(get_control_commands_port()); }
+    
+    // Metrics bind endpoint getters (for publishers)
+    static std::string get_strategy_engine_metrics_bind_endpoint() { return make_bind_endpoint(get_strategy_engine_metrics_port()); }
+    static std::string get_market_data_handler_metrics_bind_endpoint() { return make_bind_endpoint(get_market_data_handler_metrics_port()); }
+    static std::string get_order_gateway_metrics_bind_endpoint() { return make_bind_endpoint(get_order_gateway_metrics_port()); }
+    static std::string get_position_risk_service_metrics_bind_endpoint() { return make_bind_endpoint(get_position_risk_service_metrics_port()); }
+    static std::string get_metrics_aggregator_bind_endpoint() { return make_bind_endpoint(get_metrics_aggregator_port()); }
+    static std::string get_control_commands_bind_endpoint() { return make_bind_endpoint(get_control_commands_port()); }
     
     // Timing parameter getters
     static int get_poll_timeout_ms() { return runtime.poll_timeout_ms; }
@@ -338,28 +410,9 @@ public:
     // Load configuration from file into runtime overrides
     static bool load_from_file(const char* filename);
     
-    // Validate configuration
-    static bool validate_config();
-    
     // Get configuration as string for debugging
     static std::string to_string();
 };
 
-// Inline definitions for better performance
-inline bool StaticConfig::validate_config() {
-    return runtime.market_data_endpoint != nullptr &&
-           runtime.logger_endpoint != nullptr &&
-           runtime.signals_endpoint != nullptr &&
-           runtime.executions_endpoint != nullptr &&
-           runtime.positions_endpoint != nullptr &&
-           runtime.log_level >= LOG_LEVEL_DEBUG &&
-           runtime.log_level <= LOG_LEVEL_CRITICAL &&
-           runtime.mock_data_frequency_hz > 0 &&
-           runtime.max_position_value > 0.0 &&
-           runtime.max_daily_loss > 0.0 &&
-           runtime.position_limit_per_symbol > 0 &&
-           runtime.momentum_threshold > 0.0 &&
-           runtime.min_signal_interval_ms > 0;
-}
 
 } // namespace hft

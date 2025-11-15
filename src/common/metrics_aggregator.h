@@ -26,7 +26,7 @@ struct ServiceMetrics {
 // Aggregates metrics from multiple services via ZMQ
 class MetricsAggregator {
 public:
-    explicit MetricsAggregator(const std::string& subscriber_endpoint = "tcp://localhost:5560");
+    explicit MetricsAggregator(const std::string& subscriber_endpoint);
     ~MetricsAggregator();
     
     bool initialize();

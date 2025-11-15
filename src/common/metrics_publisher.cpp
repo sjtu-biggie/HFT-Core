@@ -1,4 +1,5 @@
 #include "metrics_publisher.h"
+#include "static_config.h"
 #include "high_res_timer.h"
 #include <iostream>
 #include <cstring>

@@ -1,4 +1,5 @@
 #include "order_book.h"
+#include "static_config.h"
 #include "logging.h"
 #include <algorithm>
 #include <numeric>

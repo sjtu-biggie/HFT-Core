@@ -1,4 +1,5 @@
 #include "metrics_collector.h"
+#include "static_config.h"
 #include <algorithm>
 #include <fstream>
 #include <sstream>

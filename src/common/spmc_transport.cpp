@@ -1,4 +1,5 @@
 #include "spmc_transport.h"
+#include "static_config.h"
 #include <iostream>
 #include <cstring>
 #include <thread>

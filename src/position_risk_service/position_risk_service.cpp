@@ -13,7 +13,7 @@ PositionRiskService::PositionRiskService()
     : running_(false), max_position_value_(100000.0), max_daily_loss_(5000.0)
     , current_daily_pnl_(0.0), positions_updated_(0), risk_checks_(0), risk_violations_(0)
     , logger_("PositionRiskService", StaticConfig::get_logger_endpoint())
-    , metrics_publisher_("PositionRiskService", ("tcp://*:" + std::to_string(StaticConfig::get_position_risk_service_metrics_port())).c_str()) {
+    , metrics_publisher_("PositionRiskService", StaticConfig::get_position_risk_service_metrics_bind_endpoint()) {
 }
 
 PositionRiskService::~PositionRiskService() {

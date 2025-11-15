@@ -32,7 +32,7 @@ bool LowLatencyLogger::initialize() {
         int rcvhwm = 10000;
         log_subscriber_->setsockopt(ZMQ_RCVHWM, &rcvhwm, sizeof(rcvhwm));
         
-        const char* endpoint = StaticConfig::get_logger_endpoint();
+        const std::string endpoint = StaticConfig::get_logger_endpoint();
         log_subscriber_->bind(endpoint);
         std::cout << "[LowLatencyLogger] Bound to " << endpoint << std::endl;
         

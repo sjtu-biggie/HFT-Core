@@ -1,4 +1,5 @@
 #include "control_api.h"
+#include "../common/static_config.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -19,10 +20,15 @@ int main() {
     signal(SIGTERM, signal_handler);
     
     try {
+        // Load configuration first (needed before ControlAPI constructor)
+        if (!hft::StaticConfig::load_from_file("config/hft_config.conf")) {
+            std::cerr << "Warning: Failed to load config file, using defaults" << std::endl;
+        }
+        
         // Start the Control API
         start_control_api();
         
-        std::cout << "Control API is running on localhost:8081" << std::endl;
+        std::cout << "Control API is running on localhost:"<< hft::StaticConfig::get_control_api_port() << std::endl;
         std::cout << "Available endpoints:" << std::endl;
         std::cout << "  POST /api/start - Start trading" << std::endl;
         std::cout << "  POST /api/stop - Stop trading" << std::endl;

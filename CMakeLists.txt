@@ -113,9 +113,9 @@ set(SERVICES
 # Create executables for each service
 foreach(SERVICE ${SERVICES})
     if(SERVICE STREQUAL "order_gateway")
-        add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp src/${SERVICE}/alpaca_client.cpp)
+        add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp src/${SERVICE}/alpaca_client.cpp src/${SERVICE}/alpaca_trade_client.cpp src/common/websocket_client.cpp)
     elseif(SERVICE STREQUAL "market_data_handler")
-        add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp src/${SERVICE}/pcap_reader.cpp src/${SERVICE}/alpaca_market_data.cpp)
+        add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp src/${SERVICE}/pcap_reader.cpp src/${SERVICE}/alpaca_market_data.cpp src/common/websocket_client.cpp)
     else()
         add_executable(${SERVICE} src/${SERVICE}/main.cpp src/${SERVICE}/${SERVICE}.cpp)
     endif()
@@ -123,7 +123,7 @@ foreach(SERVICE ${SERVICES})
     
     # Add jsoncpp and libcurl support for order_gateway
     if(SERVICE STREQUAL "order_gateway")
-        target_link_libraries(${SERVICE} ${JSONCPP_LIBRARIES} ${LIBCURL_LIBRARIES})
+        target_link_libraries(${SERVICE} ${JSONCPP_LIBRARIES} ${LIBCURL_LIBRARIES} ssl crypto)
         target_compile_options(${SERVICE} PRIVATE ${JSONCPP_CFLAGS_OTHER} ${LIBCURL_CFLAGS_OTHER})
     endif()
     

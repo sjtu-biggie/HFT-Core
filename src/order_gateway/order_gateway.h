@@ -5,6 +5,7 @@
 #include "../common/static_config.h"
 #include "../common/metrics_publisher.h"
 #include "alpaca_client.h"
+#include "alpaca_trade_client.h"
 #include <zmq.hpp>
 #include <memory>
 #include <thread>
@@ -57,9 +58,13 @@ private:
     std::unordered_map<uint64_t, Order> active_orders_;
     std::atomic<uint64_t> next_order_id_;
     
-    // Alpaca integration (optional)
+    // Trading mode (mock, paper, live)
+    enum class TradingMode { MOCK, PAPER, LIVE };
+    TradingMode trading_mode_;
+    
+    // Alpaca integration
     std::unique_ptr<AlpacaClient> alpaca_client_;
-    bool use_alpaca_;
+    std::unique_ptr<AlpacaTradeClient> trade_client_;
     
     // Statistics
     std::atomic<uint64_t> orders_processed_;
@@ -73,8 +78,10 @@ private:
     void handle_trading_signal(const TradingSignal& signal);
     void simulate_order_fill(const Order& order);
     void handle_alpaca_order(Order& order);
+    void handle_trade_update(const AlpacaTradeUpdate& update);
     void publish_execution(const OrderExecution& execution);
     void log_statistics();
+    TradingMode parse_trading_mode(const std::string& mode_str);
     
     Logger logger_;
 };

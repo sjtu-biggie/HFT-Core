@@ -29,7 +29,7 @@ struct SerializedMetricEntry {
 class MetricsPublisher {
 public:
     explicit MetricsPublisher(const std::string& service_name, 
-                             const std::string& endpoint = "tcp://*:5560");
+                             const std::string& endpoint);
     ~MetricsPublisher();
     
     bool initialize();

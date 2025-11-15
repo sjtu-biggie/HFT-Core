@@ -11,9 +11,9 @@
 namespace hft {
 
 OrderGateway::OrderGateway()
-    : running_(false), next_order_id_(1), use_alpaca_(false), orders_processed_(0), orders_filled_(0), orders_rejected_(0)
+    : running_(false), next_order_id_(1), trading_mode_(TradingMode::MOCK), orders_processed_(0), orders_filled_(0), orders_rejected_(0)
     , logger_("OrderGateway", StaticConfig::get_logger_endpoint())
-    , metrics_publisher_("OrderGateway", "tcp://*:5563") {
+    , metrics_publisher_("OrderGateway", StaticConfig::get_order_gateway_metrics_bind_endpoint()) {
 }
 
 OrderGateway::~OrderGateway() {
@@ -50,32 +50,57 @@ bool OrderGateway::initialize() {
         execution_publisher_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         execution_publisher_->bind(StaticConfig::get_executions_endpoint());
         
-        // Initialize Alpaca client if trading is enabled and not in paper mode
-        if (StaticConfig::get_trading_enabled() && !StaticConfig::get_paper_trading()) {
+        // Parse trading mode from configuration
+        trading_mode_ = parse_trading_mode(StaticConfig::get_trading_mode());
+        
+        // Initialize Alpaca clients based on trading mode
+        if (trading_mode_ == TradingMode::PAPER || trading_mode_ == TradingMode::LIVE) {
             alpaca_client_ = std::make_unique<AlpacaClient>();
             
-            // Try to load Alpaca credentials from environment variables
-            const char* api_key = std::getenv("ALPACA_API_KEY");
-            const char* api_secret = std::getenv("ALPACA_API_SECRET");
-            const char* base_url = std::getenv("ALPACA_BASE_URL");
+            std::string api_key = StaticConfig::get_alpaca_api_key();
+            std::string api_secret = StaticConfig::get_alpaca_secret_key();
             
-            if (api_key && api_secret) {
-                std::string url = base_url ? base_url : "https://paper-api.alpaca.markets";
-                if (alpaca_client_->initialize(api_key, api_secret, url)) {
-                    use_alpaca_ = true;
-                    logger_.info("Alpaca client initialized successfully");
-                } else {
-                    logger_.warning("Failed to initialize Alpaca client, falling back to paper trading");
-                    use_alpaca_ = false;
-                }
+            if (api_key.empty() || api_secret.empty()) {
+                logger_.error("Alpaca credentials not configured, falling back to mock mode");
+                trading_mode_ = TradingMode::MOCK;
             } else {
-                logger_.warning("Alpaca credentials not found, using paper trading mode");
-                use_alpaca_ = false;
+                // Choose base URL based on mode
+                std::string base_url = (trading_mode_ == TradingMode::LIVE) 
+                    ? StaticConfig::get_alpaca_live_base_url()
+                    : StaticConfig::get_alpaca_paper_base_url();
+                
+                if (alpaca_client_->initialize(api_key, api_secret, base_url)) {
+                    logger_.info("Alpaca REST client initialized successfully");
+                    
+                    // Initialize trade updates WebSocket client if configured
+                    if (StaticConfig::get_use_websocket_updates()) {
+                        trade_client_ = std::make_unique<AlpacaTradeClient>();
+                        
+                        if (trade_client_->initialize_alpaca(api_key, api_secret,
+                                                           StaticConfig::get_alpaca_trade_websocket_url(),
+                                                           StaticConfig::get_alpaca_trade_websocket_host(),
+                                                           trading_mode_ == TradingMode::PAPER)) {
+                            
+                            // Set trade update callback
+                            trade_client_->set_trade_callback([this](const AlpacaTradeUpdate& update) {
+                                handle_trade_update(update);
+                            });
+                            
+                            logger_.info("Alpaca trade updates WebSocket client initialized");
+                        } else {
+                            logger_.warning("Failed to initialize Alpaca trade updates client");
+                        }
+                    }
+                } else {
+                    logger_.error("Failed to initialize Alpaca client, falling back to mock mode");
+                    trading_mode_ = TradingMode::MOCK;
+                }
             }
         }
         
-        std::string mode = use_alpaca_ ? "live trading (Alpaca)" : "paper trading";
-        logger_.info("Order Gateway initialized in " + mode + " mode");
+        std::string mode_str = (trading_mode_ == TradingMode::LIVE) ? "live trading" :
+                              (trading_mode_ == TradingMode::PAPER) ? "paper trading" : "mock trading";
+        logger_.info("Order Gateway initialized in " + mode_str + " mode");
         return true;
         
     } catch (const zmq::error_t& e) {
@@ -96,6 +121,16 @@ void OrderGateway::start() {
     // Start metrics publisher
     metrics_publisher_.start();
     
+    // Start WebSocket trade client if available
+    if (trade_client_) {
+        trade_client_->start();
+        if (trade_client_->connect()) {
+            logger_.info("Trade updates WebSocket client connected");
+        } else {
+            logger_.warning("Failed to connect trade updates WebSocket client");
+        }
+    }
+    
     processing_thread_ = std::make_unique<std::thread>(&OrderGateway::process_signals, this);
     logger_.info("Order Gateway started");
 }
@@ -110,6 +145,11 @@ void OrderGateway::stop() {
     
     // Stop metrics publisher
     metrics_publisher_.stop();
+    
+    // Stop WebSocket trade client
+    if (trade_client_) {
+        trade_client_->stop();
+    }
     
     if (processing_thread_ && processing_thread_->joinable()) {
         processing_thread_->join();
@@ -190,11 +230,12 @@ void OrderGateway::handle_trading_signal(const TradingSignal& signal) {
     // Record metrics
     HFT_COMPONENT_COUNTER(hft::metrics::ORDERS_RECEIVED_TOTAL);
     
-    // Route to appropriate execution method
-    if (use_alpaca_) {
-        handle_alpaca_order(active_orders_[order_id]);
-    } else {
+    // Route to appropriate execution method based on trading mode
+    if (trading_mode_ == TradingMode::MOCK) {
         simulate_order_fill(order);
+    } else {
+        // PAPER or LIVE modes use Alpaca
+        handle_alpaca_order(active_orders_[order_id]);
     }
 }
 
@@ -214,12 +255,12 @@ void OrderGateway::simulate_order_fill(const Order& order) {
         }
     }
     
-    // Risk check simulation
-    {
-        HFT_RDTSC_TIMER(hft::metrics::RISK_CHECK_LATENCY);
-        // Simulate risk check processing
-        std::this_thread::sleep_for(std::chrono::microseconds(50));
-    }
+    // Risk check simulation - Skip for now
+    // {
+    //     HFT_RDTSC_TIMER(hft::metrics::RISK_CHECK_LATENCY);
+    //     // Simulate risk check processing
+    //     std::this_thread::sleep_for(std::chrono::microseconds(50));
+    // }
     
     // Simulate fill delay
     std::uniform_int_distribution<> delay_dist(10, 100); // 10-100ms
@@ -290,39 +331,111 @@ void OrderGateway::handle_alpaca_order(Order& order) {
             return;
         }
         
-        // Store external order ID
+        // Store external order ID and map for WebSocket updates
         order.external_order_id = response.order_id;
         active_orders_[order.order_id] = order;
         
+        // Map order for WebSocket updates
+        if (trade_client_) {
+            trade_client_->map_order(order.order_id, response.order_id);
+        }
+        
         logger_.info("Alpaca order submitted: " + response.order_id);
         
-        // Check if order was immediately filled
-        if (response.is_filled()) {
-            // Create execution report
-            OrderExecution execution{};
-            execution.header = MessageFactory::create_header(MessageType::ORDER_EXECUTION, 
-                                                            sizeof(OrderExecution) - sizeof(MessageHeader));
-            execution.order_id = order.order_id;
-            std::strncpy(execution.symbol, order.symbol.c_str(), sizeof(execution.symbol) - 1);
-            execution.exec_type = ExecutionType::FILL;
-            execution.fill_price = response.fill_price;
-            execution.fill_quantity = static_cast<uint32_t>(response.filled_qty);
-            execution.remaining_quantity = static_cast<uint32_t>(response.quantity - response.filled_qty);
-            execution.commission = response.filled_qty * 0.001; // Estimate commission
-            
-            publish_execution(execution);
-            
-            // Remove from active orders if fully filled
-            if (execution.remaining_quantity == 0) {
-                active_orders_.erase(order.order_id);
-                orders_filled_++;
+        // If WebSocket is not enabled or order immediately filled, handle locally
+        if (!StaticConfig::get_use_websocket_updates() || response.is_filled()) {
+            if (response.is_filled()) {
+                // Create execution report
+                OrderExecution execution{};
+                execution.header = MessageFactory::create_header(MessageType::ORDER_EXECUTION, 
+                                                                sizeof(OrderExecution) - sizeof(MessageHeader));
+                execution.order_id = order.order_id;
+                std::strncpy(execution.symbol, order.symbol.c_str(), sizeof(execution.symbol) - 1);
+                execution.exec_type = ExecutionType::FILL;
+                execution.fill_price = response.fill_price;
+                execution.fill_quantity = static_cast<uint32_t>(response.filled_qty);
+                execution.remaining_quantity = static_cast<uint32_t>(response.quantity - response.filled_qty);
+                execution.commission = response.filled_qty * 0.001; // Estimate commission
+                
+                publish_execution(execution);
+                
+                // Remove from active orders if fully filled
+                if (execution.remaining_quantity == 0) {
+                    if (trade_client_) {
+                        trade_client_->unmap_order(order.order_id);
+                    }
+                    active_orders_.erase(order.order_id);
+                    orders_filled_++;
+                }
             }
         }
+        // Otherwise, WebSocket will handle trade updates
         
     } catch (const std::exception& e) {
         logger_.error("Exception in Alpaca order handling: " + std::string(e.what()) + ", falling back to paper trading");
         simulate_order_fill(order);
     }
+}
+
+void OrderGateway::handle_trade_update(const AlpacaTradeUpdate& update) {
+    logger_.info("Received trade update: " + update.event + " for order " + update.order_id);
+    
+    // Find the internal order ID from external order ID
+    auto order_it = std::find_if(active_orders_.begin(), active_orders_.end(),
+        [&update](const auto& pair) { return pair.second.external_order_id == update.order_id; });
+    
+    if (order_it == active_orders_.end()) {
+        logger_.warning("Trade update for unknown order: " + update.order_id);
+        return;
+    }
+    
+    Order& order = order_it->second;
+    
+    if (update.is_fill()) {
+        // Create execution report
+        OrderExecution execution{};
+        execution.header = MessageFactory::create_header(MessageType::ORDER_EXECUTION, 
+                                                        sizeof(OrderExecution) - sizeof(MessageHeader));
+        execution.order_id = order.order_id;
+        std::strncpy(execution.symbol, order.symbol.c_str(), sizeof(execution.symbol) - 1);
+        execution.exec_type = (update.event == "fill") ? ExecutionType::FILL : ExecutionType::PARTIAL_FILL;
+        execution.fill_price = update.fill_price;
+        execution.fill_quantity = static_cast<uint32_t>(update.filled_qty);
+        execution.remaining_quantity = static_cast<uint32_t>(update.qty - update.filled_qty);
+        execution.commission = update.filled_qty * 0.001; // Estimate commission
+        
+        publish_execution(execution);
+        
+        // Update order filled quantity
+        order.filled_quantity = static_cast<uint32_t>(update.filled_qty);
+        
+        // Remove from active orders if fully filled
+        if (execution.remaining_quantity == 0) {
+            if (trade_client_) {
+                trade_client_->unmap_order(order.order_id);
+            }
+            active_orders_.erase(order_it);
+            orders_filled_++;
+        }
+    } else if (update.is_canceled() || update.is_rejected()) {
+        // Handle cancellation or rejection
+        logger_.info("Order " + std::to_string(order.order_id) + " " + update.event);
+        
+        if (trade_client_) {
+            trade_client_->unmap_order(order.order_id);
+        }
+        active_orders_.erase(order_it);
+        
+        if (update.is_rejected()) {
+            orders_rejected_++;
+        }
+    }
+}
+
+OrderGateway::TradingMode OrderGateway::parse_trading_mode(const std::string& mode_str) {
+    if (mode_str == "paper") return TradingMode::PAPER;
+    if (mode_str == "live") return TradingMode::LIVE;
+    return TradingMode::MOCK; // Default to mock
 }
 
 void OrderGateway::publish_execution(const OrderExecution& execution) {

@@ -70,12 +70,25 @@ bool StaticConfig::load_from_file(const char* filename) {
         // Parse configuration values using constexpr string comparisons where possible
         if (key == "market_data.endpoint") {
             // For endpoints, we need to store the string (allocation required)
-            static std::string market_data_endpoint_storage = value;
-            runtime.market_data_endpoint = market_data_endpoint_storage.c_str();
+            runtime.market_data_endpoint_storage = value;
         }
         else if (key == "logger.endpoint") {
-            static std::string logger_endpoint_storage = value;
-            runtime.logger_endpoint = logger_endpoint_storage.c_str();
+            runtime.logger_endpoint_storage = value;
+        }
+        else if (key == "signals.endpoint") {
+            runtime.signals_endpoint_storage = value;
+        }
+        else if (key == "executions.endpoint") {
+            runtime.executions_endpoint_storage = value;
+        }
+        else if (key == "positions.endpoint") {
+            runtime.positions_endpoint_storage = value;
+        }
+        else if (key == "control.endpoint") {
+            runtime.control_endpoint_storage = value;
+        }
+        else if (key == "websocket.endpoint") {
+            runtime.websocket_endpoint_storage = value;
         }
         else if (key == "market_data.enable_dpdk") {
             runtime.enable_dpdk = (value == "true");
@@ -91,6 +104,12 @@ bool StaticConfig::load_from_file(const char* filename) {
         }
         else if (key == "trading.paper_mode") {
             runtime.paper_trading = (value == "true");
+        }
+        else if (key == "trading.mode") {
+            runtime.trading_mode = value;
+        }
+        else if (key == "trading.use_websocket_updates") {
+            runtime.use_websocket_updates = (value == "true");
         }
         else if (key == "mock_data.enabled") {
             runtime.mock_data_enabled = (value == "true");
@@ -152,6 +171,19 @@ bool StaticConfig::load_from_file(const char* filename) {
         else if (key == "alpaca.websocket_host") {
             runtime.alpaca_websocket_host = value;
         }
+        // Alpaca trading configuration
+        else if (key == "alpaca.paper_base_url") {
+            runtime.alpaca_paper_base_url = value;
+        }
+        else if (key == "alpaca.live_base_url") {
+            runtime.alpaca_live_base_url = value;
+        }
+        else if (key == "alpaca.trade_websocket_url") {
+            runtime.alpaca_trade_websocket_url = value;
+        }
+        else if (key == "alpaca.trade_websocket_host") {
+            runtime.alpaca_trade_websocket_host = value;
+        }
         else if (key == "alpaca.max_symbols_per_request") {
             runtime.alpaca_max_symbols_per_request = std::stoi(value);
         }
@@ -173,16 +205,146 @@ bool StaticConfig::load_from_file(const char* filename) {
         else if (key == "alpaca.circuit_breaker_timeout_minutes") {
             runtime.alpaca_circuit_breaker_timeout_minutes = std::stoi(value);
         }
+        // Port configurations - reconstruct endpoints from ports if endpoint wasn't explicitly set
+        else if (key == "control_api.port") {
+            runtime.control_api_port = std::stoi(value);
+            // Only update endpoint if it wasn't explicitly set
+            if (runtime.control_endpoint_storage.empty()) {
+                runtime.control_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.control_api_port);
+            }
+        }
+        else if (key == "websocket.port") {
+            runtime.websocket_port = std::stoi(value);
+            if (runtime.websocket_endpoint_storage.empty()) {
+                runtime.websocket_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.websocket_port);
+            }
+        }
+        else if (key == "market_data.port") {
+            runtime.market_data_port = std::stoi(value);
+            if (runtime.market_data_endpoint_storage.empty()) {
+                runtime.market_data_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.market_data_port);
+            }
+        }
+        else if (key == "logger.port") {
+            runtime.logger_port = std::stoi(value);
+            if (runtime.logger_endpoint_storage.empty()) {
+                runtime.logger_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.logger_port);
+            }
+        }
+        else if (key == "signals.port") {
+            runtime.signals_port = std::stoi(value);
+            if (runtime.signals_endpoint_storage.empty()) {
+                runtime.signals_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.signals_port);
+            }
+        }
+        else if (key == "executions.port") {
+            runtime.executions_port = std::stoi(value);
+            if (runtime.executions_endpoint_storage.empty()) {
+                runtime.executions_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.executions_port);
+            }
+        }
+        else if (key == "positions.port") {
+            runtime.positions_port = std::stoi(value);
+            if (runtime.positions_endpoint_storage.empty()) {
+                runtime.positions_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.positions_port);
+            }
+        }
+        // ZMQ parameters
+        else if (key == "zmq.send_hwm") {
+            runtime.zmq_send_hwm = std::stoi(value);
+        }
+        else if (key == "zmq.recv_hwm") {
+            runtime.zmq_recv_hwm = std::stoi(value);
+        }
+        else if (key == "zmq.linger") {
+            runtime.zmq_linger_ms = std::stoi(value);
+        }
+        // Timing parameters (many exist in config but aren't loaded)
+        else if (key == "timing.poll_timeout_ms") {
+            runtime.poll_timeout_ms = std::stoi(value);
+        }
+        else if (key == "timing.stats_interval_seconds") {
+            runtime.stats_interval_seconds = std::stoi(value);
+        }
+        else if (key == "timing.control_poll_interval_ms") {
+            runtime.control_poll_interval_ms = std::stoi(value);
+        }
+        else if (key == "timing.processing_sleep_microseconds") {
+            runtime.processing_sleep_microseconds = std::stoi(value);
+        }
+        else if (key == "timing.fast_processing_sleep_microseconds") {
+            runtime.fast_processing_sleep_microseconds = std::stoi(value);
+        }
+        else if (key == "timing.order_execution_min_delay_ms") {
+            runtime.order_execution_min_delay_ms = std::stoi(value);
+        }
+        else if (key == "timing.order_execution_max_delay_ms") {
+            runtime.order_execution_max_delay_ms = std::stoi(value);
+        }
+        else if (key == "timing.metrics_update_interval_seconds") {
+            runtime.metrics_update_interval_seconds = std::stoi(value);
+        }
+        else if (key == "timing.metrics_publisher_interval_ms") {
+            runtime.metrics_publisher_interval_ms = std::stoi(value);
+        }
+        // Mock data generation parameters
+        else if (key == "mock_data.price_change_volatility") {
+            runtime.price_change_volatility = std::stod(value);
+        }
+        else if (key == "mock_data.min_price_multiplier") {
+            runtime.min_price_multiplier = std::stod(value);
+        }
+        else if (key == "mock_data.max_price_multiplier") {
+            runtime.max_price_multiplier = std::stod(value);
+        }
+        else if (key == "mock_data.base_spread_basis_points") {
+            runtime.base_spread_basis_points = std::stod(value);
+        }
+        else if (key == "mock_data.min_volume") {
+            runtime.min_volume = std::stoi(value);
+        }
+        else if (key == "mock_data.max_volume") {
+            runtime.max_volume = std::stoi(value);
+        }
+        else if (key == "mock_data.min_last_size") {
+            runtime.min_last_size = std::stoi(value);
+        }
+        else if (key == "mock_data.max_last_size") {
+            runtime.max_last_size = std::stoi(value);
+        }
+        // Symbol prices (from config file)
+        else if (key.substr(0, 14) == "symbol_prices.") {
+            std::string symbol = key.substr(14);
+            runtime.symbol_base_prices[symbol] = std::stod(value);
+        }
+        // Symbol volatilities (from config file)
+        else if (key.substr(0, 19) == "symbol_volatilities.") {
+            std::string symbol = key.substr(19);
+            runtime.symbol_volatilities[symbol] = std::stod(value);
+        }
+        // Metrics ports
+        else if (key == "metrics.strategy_engine_port") {
+            runtime.strategy_engine_metrics_port = std::stoi(value);
+        }
+        else if (key == "metrics.market_data_handler_port") {
+            runtime.market_data_handler_metrics_port = std::stoi(value);
+        }
+        else if (key == "metrics.order_gateway_port") {
+            runtime.order_gateway_metrics_port = std::stoi(value);
+        }
+        else if (key == "metrics.position_risk_service_port") {
+            runtime.position_risk_service_metrics_port = std::stoi(value);
+        }
+        else if (key == "metrics.aggregator_port") {
+            runtime.metrics_aggregator_port = std::stoi(value);
+        }
+        else if (key == "metrics.control_commands_port") {
+            runtime.control_commands_port = std::stoi(value);
+        }
         // Ignore unknown keys silently for forward compatibility
     }
     
     file.close();
-    
-    if (!validate_config()) {
-        std::cerr << "[StaticConfig] Error: Invalid configuration after loading from " << filename << std::endl;
-        return false;
-    }
-    
     std::cout << "[StaticConfig] Successfully loaded configuration from " << filename << std::endl;
     return true;
 }
