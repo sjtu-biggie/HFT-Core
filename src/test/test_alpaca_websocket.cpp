@@ -23,7 +23,7 @@ public:
         std::cout << "Testing with Boost.Beast implementation" << std::endl;
         
         // Load configuration from file
-        StaticConfig::load_from_file("config/hft_config.conf");
+        StaticConfig::load_from_file("config/hft_config_override.conf");
         
         // Initialize Alpaca client with WebSocket configuration from config
         std::string websocket_url = StaticConfig::get_alpaca_websocket_url();

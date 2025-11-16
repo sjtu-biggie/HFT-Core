@@ -179,8 +179,8 @@ print_test "Running mini integration test (15 seconds)..."
 run_test "Mini Integration Test" "timeout 17s ./integration_test 15 > /dev/null 2>&1"
 
 # Test 6: Configuration test
-if [ -f "../config/hft_config.conf" ]; then
-    run_test "Config File Readable" "[ -r '../config/hft_config.conf' ]"
+if [ -f "../config/hft_config_override.conf" ]; then
+    run_test "Config File Readable" "[ -r '../config/hft_config_override.conf' ]"
 else
     print_warning "Config file not found, skipping config test"
 fi

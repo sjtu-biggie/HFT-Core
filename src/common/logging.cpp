@@ -9,7 +9,7 @@ namespace hft {
 Logger::Logger(const std::string& component_name, const std::string& endpoint)
     : component_name_(component_name)
     , min_level_(LogLevel::INFO)
-    , console_output_(true)
+    , console_output_(false)
     , connected_(false) {
     
     try {

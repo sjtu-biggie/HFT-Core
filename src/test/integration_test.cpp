@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
     int duration = (argc > 1) ? std::atoi(argv[1]) : 20;  // Default 20 seconds
     
     // Initialize configuration
-    StaticConfig::load_from_file("config/hft_config.conf");
+    StaticConfig::load_from_file("config/hft_config_override.conf");
     
     // Initialize logging
     GlobalLogger::instance().init("IntegrationTest", StaticConfig::get_logger_endpoint());

@@ -12,7 +12,6 @@ namespace hft {
 class StaticConfig {
 public:
     // Port numbers as integers for direct use (defined first)
-    static constexpr int CONTROL_API_PORT = 8081;
     static constexpr int WEBSOCKET_PORT = 8080;
     static constexpr int MARKET_DATA_PORT = 5556;
     static constexpr int LOGGER_PORT = 5555;
@@ -43,13 +42,11 @@ public:
         make_endpoint(POSITIONS_PORT) : runtime.positions_endpoint_storage; }
     static const std::string get_websocket_endpoint() { return runtime.websocket_endpoint_storage.empty() ? 
         make_endpoint(WEBSOCKET_PORT) : runtime.websocket_endpoint_storage; }
-    static const std::string get_control_endpoint() { return runtime.control_endpoint_storage.empty() ? 
-        make_endpoint(CONTROL_API_PORT) : runtime.control_endpoint_storage; }
     
     // Performance tuning parameters
-    static constexpr int ZMQ_SEND_HWM = 1000;
-    static constexpr int ZMQ_RECV_HWM = 1000;
-    static constexpr int ZMQ_LINGER_MS = 0;
+    // static constexpr int ZMQ_SEND_HWM = 1000;
+    // static constexpr int ZMQ_RECV_HWM = 1000;
+    // static constexpr int ZMQ_LINGER_MS = 0;
     
     // Feature flags
     static constexpr bool ENABLE_DPDK = false;
@@ -76,10 +73,6 @@ public:
     static constexpr int MOCK_DATA_FREQUENCY_HZ = 100;
     
     // Metrics publisher ports (one per service)
-    static constexpr int STRATEGY_ENGINE_METRICS_PORT = 5561;
-    static constexpr int MARKET_DATA_HANDLER_METRICS_PORT = 5562;
-    static constexpr int ORDER_GATEWAY_METRICS_PORT = 5563;
-    static constexpr int POSITION_RISK_SERVICE_METRICS_PORT = 5564;
     static constexpr int METRICS_AGGREGATOR_PORT = 5560;
     static constexpr int CONTROL_COMMANDS_PORT = 5570;
     
@@ -169,18 +162,12 @@ public:
         int mock_data_frequency_hz = MOCK_DATA_FREQUENCY_HZ;
         
         // Port number overrides
-        int control_api_port = CONTROL_API_PORT;
         int websocket_port = WEBSOCKET_PORT;
         int market_data_port = MARKET_DATA_PORT;
         int logger_port = LOGGER_PORT;
         int signals_port = SIGNALS_PORT;
         int executions_port = EXECUTIONS_PORT;
         int positions_port = POSITIONS_PORT;
-        
-        // ZMQ parameters
-        int zmq_send_hwm = ZMQ_SEND_HWM;
-        int zmq_recv_hwm = ZMQ_RECV_HWM;
-        int zmq_linger_ms = ZMQ_LINGER_MS;
         
         double max_position_value = MAX_POSITION_VALUE;
         double max_daily_loss = MAX_DAILY_LOSS;
@@ -201,10 +188,6 @@ public:
         bool loop_replay = false;
         
         // Metrics publisher ports
-        int strategy_engine_metrics_port = STRATEGY_ENGINE_METRICS_PORT;
-        int market_data_handler_metrics_port = MARKET_DATA_HANDLER_METRICS_PORT;
-        int order_gateway_metrics_port = ORDER_GATEWAY_METRICS_PORT;
-        int position_risk_service_metrics_port = POSITION_RISK_SERVICE_METRICS_PORT;
         int metrics_aggregator_port = METRICS_AGGREGATOR_PORT;
         int control_commands_port = CONTROL_COMMANDS_PORT;
         
@@ -278,8 +261,6 @@ public:
     
     static bool get_enable_dpdk() { return runtime.enable_dpdk; }
     static bool get_enable_io_uring() { return runtime.enable_io_uring; }
-    static bool get_trading_enabled() { return runtime.trading_enabled; }
-    static bool get_paper_trading() { return runtime.paper_trading; }
     static bool get_mock_data_enabled() { return runtime.mock_data_enabled; }
     
     // Trading mode configuration
@@ -291,24 +272,17 @@ public:
     static const std::string& get_alpaca_live_base_url() { return runtime.alpaca_live_base_url; }
     static const std::string& get_alpaca_trade_websocket_url() { return runtime.alpaca_trade_websocket_url; }
     static const std::string& get_alpaca_trade_websocket_host() { return runtime.alpaca_trade_websocket_host; }
-    static bool get_log_to_console() { return runtime.log_to_console; }
     
     static int get_log_level() { return runtime.log_level; }
     static int get_mock_data_frequency_hz() { return runtime.mock_data_frequency_hz; }
     
     // Port number getters
-    static int get_control_api_port() { return runtime.control_api_port; }
     static int get_websocket_port() { return runtime.websocket_port; }
     static int get_market_data_port() { return runtime.market_data_port; }
     static int get_logger_port() { return runtime.logger_port; }
     static int get_signals_port() { return runtime.signals_port; }
     static int get_executions_port() { return runtime.executions_port; }
     static int get_positions_port() { return runtime.positions_port; }
-    
-    // ZMQ parameter getters
-    static int get_zmq_send_hwm() { return runtime.zmq_send_hwm; }
-    static int get_zmq_recv_hwm() { return runtime.zmq_recv_hwm; }
-    static int get_zmq_linger_ms() { return runtime.zmq_linger_ms; }
     
     static double get_max_position_value() { return runtime.max_position_value; }
     static double get_max_daily_loss() { return runtime.max_daily_loss; }
@@ -328,26 +302,14 @@ public:
     static bool get_loop_replay() { return runtime.loop_replay; }
     
     // Metrics publisher port getters
-    static int get_strategy_engine_metrics_port() { return runtime.strategy_engine_metrics_port; }
-    static int get_market_data_handler_metrics_port() { return runtime.market_data_handler_metrics_port; }
-    static int get_order_gateway_metrics_port() { return runtime.order_gateway_metrics_port; }
-    static int get_position_risk_service_metrics_port() { return runtime.position_risk_service_metrics_port; }
     static int get_metrics_aggregator_port() { return runtime.metrics_aggregator_port; }
     static int get_control_commands_port() { return runtime.control_commands_port; }
     
     // Metrics endpoint getters (constructed from ports)
-    static std::string get_strategy_engine_metrics_endpoint() { return make_endpoint(get_strategy_engine_metrics_port()); }
-    static std::string get_market_data_handler_metrics_endpoint() { return make_endpoint(get_market_data_handler_metrics_port()); }
-    static std::string get_order_gateway_metrics_endpoint() { return make_endpoint(get_order_gateway_metrics_port()); }
-    static std::string get_position_risk_service_metrics_endpoint() { return make_endpoint(get_position_risk_service_metrics_port()); }
     static std::string get_metrics_aggregator_endpoint() { return make_endpoint(get_metrics_aggregator_port()); }
     static std::string get_control_commands_endpoint() { return make_endpoint(get_control_commands_port()); }
     
     // Metrics bind endpoint getters (for publishers)
-    static std::string get_strategy_engine_metrics_bind_endpoint() { return make_bind_endpoint(get_strategy_engine_metrics_port()); }
-    static std::string get_market_data_handler_metrics_bind_endpoint() { return make_bind_endpoint(get_market_data_handler_metrics_port()); }
-    static std::string get_order_gateway_metrics_bind_endpoint() { return make_bind_endpoint(get_order_gateway_metrics_port()); }
-    static std::string get_position_risk_service_metrics_bind_endpoint() { return make_bind_endpoint(get_position_risk_service_metrics_port()); }
     static std::string get_metrics_aggregator_bind_endpoint() { return make_bind_endpoint(get_metrics_aggregator_port()); }
     static std::string get_control_commands_bind_endpoint() { return make_bind_endpoint(get_control_commands_port()); }
     

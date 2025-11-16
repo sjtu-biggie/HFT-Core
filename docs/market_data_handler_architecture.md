@@ -57,7 +57,7 @@ graph TB
     
     %% Configuration & Control
     subgraph "Configuration & Control"
-        CONFIG[StaticConfig<br/>hft_config.conf<br/>- API keys<br/>- Data source selection<br/>- Performance parameters]
+        CONFIG[StaticConfig<br/>hft_config_override.conf<br/>- API keys<br/>- Data source selection<br/>- Performance parameters]
         CTRL_API[Control API<br/>System Commands<br/>tcp://localhost:8080]
     end
     
@@ -136,7 +136,7 @@ graph TB
 
 ### 5. Configuration & Control
 - StaticConfig for compile-time optimization
-- Runtime configuration via hft_config.conf
+- Runtime configuration via hft_config_override.conf
 - Control API for system management
 
 ## Performance Characteristics
@@ -146,7 +146,7 @@ graph TB
 - **Monitoring**: Comprehensive metrics and health checks
 
 ## Current Configuration
-Based on `config/hft_config.conf`:
+Based on `config/hft_config_override.conf`:
 - Primary data source: `market_data.source=alpaca`
 - WebSocket URL: `wss://stream.data.alpaca.markets/v2/iex`
 - Fallback options: PCAP replay and mock data generation

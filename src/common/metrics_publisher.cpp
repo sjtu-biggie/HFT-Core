@@ -76,7 +76,7 @@ void MetricsPublisher::publish_loop(int interval_ms) {
     while (running_.load()) {
         try {
             auto message_data = serialize_metrics();
-            
+            std::cout << "Publishing "<<message_data.size() << " metrics"<<std::endl;
             if (!message_data.empty()) {
                 zmq::message_t message(message_data.size());
                 std::memcpy(message.data(), message_data.data(), message_data.size());

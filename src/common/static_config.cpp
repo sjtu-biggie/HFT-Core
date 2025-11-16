@@ -12,10 +12,10 @@ StaticConfig::RuntimeOverrides StaticConfig::runtime = {};
 bool StaticConfig::load_from_file(const char* filename) {
     // Try multiple possible paths to make it always succeed
     std::vector<std::string> paths_to_try = {
-        filename,                           // Original path (e.g., "config/hft_config.conf")
-        std::string("../") + filename,      // From build directory (e.g., "../config/hft_config.conf") 
+        filename,                           // Original path (e.g., "config/hft_config_override.conf")
+        std::string("../") + filename,      // From build directory (e.g., "../config/hft_config_override.conf") 
         std::string("../../") + filename,   // From nested build dirs
-        "/home/gyang197/project/hft/config/hft_config.conf"  // Absolute fallback
+        "/home/gyang197/project/hft/config/hft_config_override.conf"  // Absolute fallback
     };
     
     std::ifstream file;
@@ -205,14 +205,6 @@ bool StaticConfig::load_from_file(const char* filename) {
         else if (key == "alpaca.circuit_breaker_timeout_minutes") {
             runtime.alpaca_circuit_breaker_timeout_minutes = std::stoi(value);
         }
-        // Port configurations - reconstruct endpoints from ports if endpoint wasn't explicitly set
-        else if (key == "control_api.port") {
-            runtime.control_api_port = std::stoi(value);
-            // Only update endpoint if it wasn't explicitly set
-            if (runtime.control_endpoint_storage.empty()) {
-                runtime.control_endpoint_storage = "tcp://localhost:" + std::to_string(runtime.control_api_port);
-            }
-        }
         else if (key == "websocket.port") {
             runtime.websocket_port = std::stoi(value);
             if (runtime.websocket_endpoint_storage.empty()) {
@@ -250,15 +242,6 @@ bool StaticConfig::load_from_file(const char* filename) {
             }
         }
         // ZMQ parameters
-        else if (key == "zmq.send_hwm") {
-            runtime.zmq_send_hwm = std::stoi(value);
-        }
-        else if (key == "zmq.recv_hwm") {
-            runtime.zmq_recv_hwm = std::stoi(value);
-        }
-        else if (key == "zmq.linger") {
-            runtime.zmq_linger_ms = std::stoi(value);
-        }
         // Timing parameters (many exist in config but aren't loaded)
         else if (key == "timing.poll_timeout_ms") {
             runtime.poll_timeout_ms = std::stoi(value);
@@ -323,18 +306,6 @@ bool StaticConfig::load_from_file(const char* filename) {
             runtime.symbol_volatilities[symbol] = std::stod(value);
         }
         // Metrics ports
-        else if (key == "metrics.strategy_engine_port") {
-            runtime.strategy_engine_metrics_port = std::stoi(value);
-        }
-        else if (key == "metrics.market_data_handler_port") {
-            runtime.market_data_handler_metrics_port = std::stoi(value);
-        }
-        else if (key == "metrics.order_gateway_port") {
-            runtime.order_gateway_metrics_port = std::stoi(value);
-        }
-        else if (key == "metrics.position_risk_service_port") {
-            runtime.position_risk_service_metrics_port = std::stoi(value);
-        }
         else if (key == "metrics.aggregator_port") {
             runtime.metrics_aggregator_port = std::stoi(value);
         }
@@ -363,10 +334,7 @@ std::string StaticConfig::to_string() {
     oss << "  Features:\n";
     oss << "    enable_dpdk: " << (get_enable_dpdk() ? "true" : "false") << "\n";
     oss << "    enable_io_uring: " << (get_enable_io_uring() ? "true" : "false") << "\n";
-    oss << "    trading_enabled: " << (get_trading_enabled() ? "true" : "false") << "\n";
-    oss << "    paper_trading: " << (get_paper_trading() ? "true" : "false") << "\n";
     oss << "    mock_data_enabled: " << (get_mock_data_enabled() ? "true" : "false") << "\n";
-    oss << "    log_to_console: " << (get_log_to_console() ? "true" : "false") << "\n";
     
     oss << "  Parameters:\n";
     oss << "    log_level: " << get_log_level() << "\n";

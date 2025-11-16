@@ -223,7 +223,7 @@ cd build
 REQUIRED_EXECUTABLES=("integration_test" "low_latency_logger" "market_data_handler" "strategy_engine" "order_gateway" "position_risk_service")
 
 if [ "$SERVICES_MODE" == "all" ]; then
-    REQUIRED_EXECUTABLES+=("websocket_bridge" "control_api")
+    REQUIRED_EXECUTABLES+=("websocket_bridge")
 fi
 
 for exe in "${REQUIRED_EXECUTABLES[@]}"; do
@@ -253,7 +253,6 @@ sleep 2
 # Start additional services if "all" mode
 if [ "$SERVICES_MODE" == "all" ]; then
     start_service "websocket_bridge" "./websocket_bridge"
-    start_service "control_api" "./control_api"
     sleep 1
 fi
 

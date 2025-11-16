@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     std::cout << "=========================" << std::endl;
     
     // Initialize configuration
-    std::string config_file = (argc > 1) ? argv[1] : "config/hft_config.conf";
+    std::string config_file = (argc > 1) ? argv[1] : "config/hft_config_override.conf";
     StaticConfig::load_from_file(config_file.c_str());
     
     // Initialize logging

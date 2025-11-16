@@ -99,7 +99,7 @@ int main() {
     std::cout << "=========================" << std::endl;
     
     // Initialize StaticConfig for tests
-    StaticConfig::load_from_file("config/hft_config.conf");
+    StaticConfig::load_from_file("config/hft_config_override.conf");
     
     try {
         test_logger_creation();

@@ -198,7 +198,6 @@ remote_write:
 
 **Scrape Targets**:
 - **Port 8080**: WebSocket Bridge (all HFT metrics)
-- **Port 8081**: Control API (system control metrics)
 
 ### Grafana Dashboard
 

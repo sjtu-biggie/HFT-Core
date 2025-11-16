@@ -84,7 +84,7 @@ StrategyEngine::StrategyEngine()
     , market_data_processed_(0)
     , signals_generated_(0)
     , logger_("StrategyEngine", StaticConfig::get_logger_endpoint())
-    , metrics_publisher_("StrategyEngine", StaticConfig::get_strategy_engine_metrics_bind_endpoint()) {
+    , metrics_publisher_("StrategyEngine", StaticConfig::get_metrics_aggregator_bind_endpoint()) {
 }
 
 StrategyEngine::~StrategyEngine() {
@@ -96,7 +96,7 @@ bool StrategyEngine::initialize() {
     
     // Initialize high-performance systems
     MetricsCollector::instance().initialize();
-    StaticConfig::load_from_file("config/hft_config.conf");
+    StaticConfig::load_from_file("config/hft_config_override.conf");
     
     // Initialize metrics publisher
     if (!metrics_publisher_.initialize()) {

@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # HFT System - Start All Services
-# Starts all services including placeholders (WebSocket Bridge and Control API)
 
 set -e
 
@@ -118,7 +117,6 @@ ALL_EXECUTABLES=(
     "order_gateway"
     "position_risk_service"
     "websocket_bridge"
-    "control_api"
 )
 
 for exe in "${ALL_EXECUTABLES[@]}"; do
@@ -171,7 +169,6 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  Support Services:"
             echo "    - WebSocket Bridge (placeholder)"
-            echo "    - Control API (placeholder)"
             echo ""
             echo "Use 'scripts/stop_services.sh' to stop all services"
             exit 0
@@ -197,10 +194,7 @@ sleep 2
 
 # 2. Start Support Services (placeholders, independent)
 start_service "websocket_bridge" "./websocket_bridge"
-start_service "control_api" "./control_api"
 
-# Small delay
-sleep 1
 
 # 3. Start Mock Data Generator (provides market data)
 start_service "market_data_handler" "./market_data_handler" 
@@ -240,7 +234,6 @@ echo
 
 print_status "Support Services (Placeholders):"
 print_status "  ✓ WebSocket Bridge      - Future: Web dashboard data feed"
-print_status "  ✓ Control API           - Future: REST API for system control"
 echo
 
 print_status "To monitor the system:"

@@ -13,7 +13,7 @@ PositionRiskService::PositionRiskService()
     : running_(false), max_position_value_(100000.0), max_daily_loss_(5000.0)
     , current_daily_pnl_(0.0), positions_updated_(0), risk_checks_(0), risk_violations_(0)
     , logger_("PositionRiskService", StaticConfig::get_logger_endpoint())
-    , metrics_publisher_("PositionRiskService", StaticConfig::get_position_risk_service_metrics_bind_endpoint()) {
+    , metrics_publisher_("PositionRiskService", StaticConfig::get_metrics_aggregator_bind_endpoint()) {
 }
 
 PositionRiskService::~PositionRiskService() {
@@ -24,7 +24,7 @@ bool PositionRiskService::initialize() {
     logger_.info("Initializing Position & Risk Service");
     
     MetricsCollector::instance().initialize();
-    StaticConfig::load_from_file("config/hft_config.conf");
+    StaticConfig::load_from_file("config/hft_config_override.conf");
 
     // Initialize metrics publisher
     if (!metrics_publisher_.initialize()) {

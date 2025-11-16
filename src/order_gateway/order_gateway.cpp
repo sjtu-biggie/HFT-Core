@@ -13,7 +13,7 @@ namespace hft {
 OrderGateway::OrderGateway()
     : running_(false), next_order_id_(1), trading_mode_(TradingMode::MOCK), orders_processed_(0), orders_filled_(0), orders_rejected_(0)
     , logger_("OrderGateway", StaticConfig::get_logger_endpoint())
-    , metrics_publisher_("OrderGateway", StaticConfig::get_order_gateway_metrics_bind_endpoint()) {
+    , metrics_publisher_("OrderGateway", StaticConfig::get_metrics_aggregator_bind_endpoint()) {
 }
 
 OrderGateway::~OrderGateway() {
@@ -24,7 +24,7 @@ bool OrderGateway::initialize() {
     logger_.info("Initializing Order Gateway");
     
     MetricsCollector::instance().initialize();
-    StaticConfig::load_from_file("config/hft_config.conf");
+    StaticConfig::load_from_file("config/hft_config_override.conf");
 
     // Initialize metrics publisher
     if (!metrics_publisher_.initialize()) {

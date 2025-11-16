@@ -132,7 +132,6 @@ else
         "order_gateway"
         "position_risk_service"
         "websocket_bridge"
-        "control_api"
         "integration_test"
     )
     
@@ -145,7 +144,7 @@ fi
 print_status "Checking for remaining HFT processes..."
 
 # Look for processes containing 'hft' or our service names
-remaining_pids=$(pgrep -f "(hft|market_data_handler|strategy_engine|order_gateway|position_risk|low_latency_logger|market_data_handler|websocket_bridge|control_api|integration_test)" 2>/dev/null || true)
+remaining_pids=$(pgrep -f "(hft|market_data_handler|strategy_engine|order_gateway|position_risk|low_latency_logger|market_data_handler|websocket_bridge|integration_test)" 2>/dev/null || true)
 
 if [ -n "$remaining_pids" ]; then
     print_warning "Found remaining HFT-related processes:"
@@ -206,7 +205,7 @@ echo
 
 # Optional: Show system status
 if command -v pgrep >/dev/null 2>&1; then
-    remaining=$(pgrep -f "(hft|market_data|strategy_engine|order_gateway|position_risk|low_latency_logger|market_data_handler|websocket_bridge|control_api)" 2>/dev/null | wc -l)
+    remaining=$(pgrep -f "(hft|market_data|strategy_engine|order_gateway|position_risk|low_latency_logger|market_data_handler|websocket_bridge)" 2>/dev/null | wc -l)
     if [ $remaining -gt 0 ]; then
         print_warning "$remaining HFT-related processes may still be running"
         print_status "Use 'ps aux | grep hft' to investigate further"

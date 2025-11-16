@@ -197,7 +197,7 @@ cd hft/
 ```
 
 ### Configuration
-Edit `config/hft_config.conf` to customize:
+Edit `config/hft_config_override.conf` to customize:
 - Network endpoints and ports
 - Performance tuning parameters  
 - Strategy configuration

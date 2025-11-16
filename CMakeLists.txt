@@ -107,7 +107,6 @@ set(SERVICES
     position_risk_service
     low_latency_logger
     websocket_bridge
-    control_api
 )
 
 # Create executables for each service

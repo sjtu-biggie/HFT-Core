@@ -14,7 +14,7 @@ class BacktestingFrameworkTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize static config with test configuration
-        hft::StaticConfig::load_from_file("config/hft_config.conf");
+        hft::StaticConfig::load_from_file("config/hft_config_override.conf");
         
         // Create test data directory
         test_data_dir_ = "test_data";

@@ -10,7 +10,7 @@
 void print_usage() {
     std::cout << "Usage: hft_backtesting [OPTIONS]\n"
               << "Options:\n"
-              << "  --config <file>     Configuration file path (default: config/hft_config.conf)\n"
+              << "  --config <file>     Configuration file path (default: config/hft_config_override.conf)\n"
               << "  --data <file>       Historical data CSV file\n"
               << "  --symbol <symbol>   Symbol to backtest (default: AAPL)\n"
               << "  --speed <multiplier> Playback speed multiplier (default: 1.0, 0 = no delay)\n"
@@ -37,7 +37,7 @@ void print_usage() {
 }
 
 int main(int argc, char* argv[]) {
-    std::string config_file = "config/hft_config.conf";
+    std::string config_file = "config/hft_config_override.conf";
     std::string data_file;
     std::string symbol = "AAPL";
     double speed = 1.0;

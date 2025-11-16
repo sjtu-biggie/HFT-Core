@@ -19,7 +19,7 @@ MarketDataHandler::MarketDataHandler()
     , bytes_processed_(0)
     , logger_("MarketDataHandler", StaticConfig::get_logger_endpoint()) 
     , throughput_tracker_(hft::metrics::MD_MESSAGES_RECEIVED, hft::metrics::MD_MESSAGES_PER_SEC)
-    , metrics_publisher_("MarketDataHandler", StaticConfig::get_market_data_handler_metrics_bind_endpoint())
+    , metrics_publisher_("MarketDataHandler", StaticConfig::get_metrics_aggregator_bind_endpoint())
     , price_generator_(std::random_device{}())
     , price_change_dist_(0.0, StaticConfig::get_price_change_volatility())
     , session_start_time_(std::chrono::steady_clock::now())
@@ -44,7 +44,7 @@ bool MarketDataHandler::initialize() {
     logger_.info("Initializing Market Data Handler");
     
     MetricsCollector::instance().initialize();
-    StaticConfig::load_from_file("config/hft_config.conf");
+    StaticConfig::load_from_file("config/hft_config_override.conf");
 
     // Initialize metrics publisher
     if (!metrics_publisher_.initialize()) {

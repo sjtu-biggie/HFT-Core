@@ -66,7 +66,7 @@ private:
     void mark_service_offline(const std::string& service_name);
     
     // Service staleness detection (5 seconds timeout)
-    static constexpr uint64_t SERVICE_TIMEOUT_NS = 5000000000ULL;
+    static constexpr uint64_t SERVICE_TIMEOUT_NS = 50000000000ULL;
 };
 
 } // namespace hft
